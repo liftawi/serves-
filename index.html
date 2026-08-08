@@ -112,7 +112,7 @@
     }
 
     // ==========================================
-    // 4. LAYOUT COMPONENTS (With Mobile Drawer)
+    // 4. LAYOUT COMPONENTS
     // ==========================================
     function Layout({ children }) {
       const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -186,48 +186,89 @@
     }
 
     // ==========================================
-    // 5. VOICE ROOM COMPONENT (WebRTC Fixed & Restored)
+    // 5. VOICE ROOM COMPONENT (WebRTC - Advanced Fixed)
     // ==========================================
     function VoiceRoom({ roomId }) {
       const { currentUser } = useApp();
       const [isJoined, setIsJoined] = useState(false);
       const [isMuted, setIsMuted] = useState(true);
       const [participants, setParticipants] = useState([]);
+      const [status, setStatus] = useState("غير متصل");
       const localStreamRef = useRef(null);
       const pcs = useRef({});
       const audioElements = useRef({});
-      const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+      const iceCandidatesQueue = useRef({});
+      
+      const configuration = {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
+          { urls: 'stun:stun3.l.google.com:19302' },
+          { urls: 'stun:stun4.l.google.com:19302' },
+          {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          },
+          {
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          },
+          {
+            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          }
+        ]
+      };
 
       const createPeerConnection = (peerId) => {
         if (pcs.current[peerId]) return pcs.current[peerId];
-        const pc = new RTCPeerConnection(configuration);
-        pcs.current[peerId] = pc;
+        try {
+          const pc = new RTCPeerConnection(configuration);
+          pcs.current[peerId] = pc;
 
-        if (localStreamRef.current) {
-          localStreamRef.current.getTracks().forEach(track => pc.addTrack(track, localStreamRef.current));
-        }
+          pc.onicecandidate = (event) => {
+            if (event.candidate) {
+              db.collection(`voiceRooms/${roomId}/iceCandidates`).add({
+                sender: currentUser.uid, to: peerId, candidate: event.candidate.toJSON()
+              });
+            }
+          };
 
-        pc.ontrack = (event) => {
-          let audio = audioElements.current[peerId];
-          if (!audio) {
-            audio = document.createElement('audio');
-            audio.id = `audio-${peerId}`;
-            audio.autoplay = true;
-            document.body.appendChild(audio);
-            audioElements.current[peerId] = audio;
-          }
-          audio.srcObject = event.streams[0];
-        };
+          pc.onconnectionstatechange = () => {
+            console.log(`Connection state with ${peerId}: ${pc.connectionState}`);
+            setStatus(pc.connectionState);
+          };
 
-        pc.onicecandidate = (event) => {
-          if (event.candidate) {
-            db.collection(`voiceRooms/${roomId}/iceCandidates`).add({
-              sender: currentUser.uid, to: peerId, candidate: event.candidate.toJSON()
+          pc.ontrack = (event) => {
+            console.log(`Received track from ${peerId}`);
+            let audio = audioElements.current[peerId];
+            if (!audio) {
+              audio = document.createElement('audio');
+              audio.id = `audio-${peerId}`;
+              audio.autoplay = true;
+              document.body.appendChild(audio);
+              audioElements.current[peerId] = audio;
+            }
+            audio.srcObject = event.streams[0];
+            // Force play to bypass browser autoplay restrictions
+            audio.play().catch(e => console.error("Error playing audio:", e));
+          };
+
+          if (localStreamRef.current) {
+            localStreamRef.current.getTracks().forEach(track => {
+              pc.addTrack(track, localStreamRef.current);
             });
           }
-        };
 
-        return pc;
+          return pc;
+        } catch(e) {
+          console.error("Error creating PeerConnection", e);
+          return null;
+        }
       };
 
       useEffect(() => {
@@ -238,17 +279,18 @@
           setParticipants(parts);
           parts.forEach(p => {
             if (p.id !== currentUser.uid && !pcs.current[p.id]) {
+              createPeerConnection(p.id);
               if (currentUser.uid < p.id) {
-                const pc = createPeerConnection(p.id);
-                pc.createOffer().then(offer => {
-                  pc.setLocalDescription(offer);
-                  const callDocId = [currentUser.uid, p.id].sort().join('_');
-                  db.collection(`voiceRooms/${roomId}/calls`).doc(callDocId).set({
-                    caller: currentUser.uid, callee: p.id, offer: { type: offer.type, sdp: offer.sdp }
-                  }, { merge: true });
-                });
-              } else {
-                createPeerConnection(p.id);
+                const pc = pcs.current[p.id];
+                if (pc) {
+                  pc.createOffer().then(offer => {
+                    pc.setLocalDescription(offer);
+                    const callDocId = [currentUser.uid, p.id].sort().join('_');
+                    db.collection(`voiceRooms/${roomId}/calls`).doc(callDocId).set({
+                      caller: currentUser.uid, callee: p.id, offer: { type: offer.type, sdp: offer.sdp }
+                    }, { merge: true });
+                  }).catch(e => console.error("Error creating offer", e));
+                }
               }
             }
           });
@@ -263,9 +305,15 @@
 
               let pc = pcs.current[peerId];
               if (!pc) pc = createPeerConnection(peerId);
+              if (!pc) return;
 
               if (callData.offer && callData.callee === currentUser.uid && !pc.currentRemoteDescription) {
                 await pc.setRemoteDescription(new RTCSessionDescription(callData.offer));
+                if (iceCandidatesQueue.current[peerId]) {
+                  for (const c of iceCandidatesQueue.current[peerId]) {
+                    try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e) {}
+                  }
+                }
                 const answer = await pc.createAnswer();
                 await pc.setLocalDescription(answer);
                 await change.doc.ref.update({ answer: { type: answer.type, sdp: answer.sdp } });
@@ -273,6 +321,11 @@
 
               if (callData.answer && callData.caller === currentUser.uid && !pc.currentRemoteDescription) {
                 await pc.setRemoteDescription(new RTCSessionDescription(callData.answer));
+                if (iceCandidatesQueue.current[peerId]) {
+                  for (const c of iceCandidatesQueue.current[peerId]) {
+                    try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e) {}
+                  }
+                }
               }
             }
           });
@@ -283,8 +336,13 @@
             if (change.type === 'added') {
               const data = change.data();
               const pc = pcs.current[data.sender];
-              if (pc && pc.remoteDescription) {
-                try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch(e) {}
+              if (pc) {
+                if (pc.remoteDescription) {
+                  try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch(e) {}
+                } else {
+                  if (!iceCandidatesQueue.current[data.sender]) iceCandidatesQueue.current[data.sender] = [];
+                  iceCandidatesQueue.current[data.sender].push(data.candidate);
+                }
               }
             }
           });
@@ -296,10 +354,12 @@
       const joinRoom = async () => {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          localStreamRef.current = stream; stream.getAudioTracks()[0].enabled = false;
+          localStreamRef.current = stream; 
+          stream.getAudioTracks()[0].enabled = false;
           await db.collection(`voiceRooms/${roomId}/participants`).doc(currentUser.uid).set({ name: currentUser.name, isMuted: true });
           setIsJoined(true); setIsMuted(true);
-        } catch (error) { alert("يرجى السماح بالوصول إلى الميكروفون."); }
+          setStatus("جاري الاتصال...");
+        } catch (error) { alert("يرجى السماح بالوصول إلى الميكروفون."); console.error(error); }
       };
 
       const toggleMute = async () => {
@@ -314,8 +374,10 @@
         pcs.current = {};
         Object.values(audioElements.current).forEach(a => a.remove());
         audioElements.current = {};
+        iceCandidatesQueue.current = {};
         await db.collection(`voiceRooms/${roomId}/participants`).doc(currentUser.uid).delete();
         setIsJoined(false);
+        setStatus("غير متصل");
       };
 
       useEffect(() => { return () => { if (isJoined) leaveRoom(); }; }, []);
@@ -342,9 +404,12 @@
             {!isJoined ? (
               <button onClick={joinRoom} className="w-full btn-primary py-3 rounded-lg font-bold text-white">الدخول للغرفة</button>
             ) : (
-              <div className="flex gap-2">
-                <button onClick={toggleMute} className={`flex-1 py-3 rounded-lg font-bold transition-all ${isMuted ? 'bg-slate-700 hover:bg-slate-600' : 'btn-primary'}`}>{isMuted ? '🔇 تشغيل' : '🎙️ كتم'}</button>
-                <button onClick={leaveRoom} className="bg-red-600 hover:bg-red-700 py-3 px-4 rounded-lg font-bold transition-all">خروج</button>
+              <div className="flex flex-col gap-2">
+                <div className="text-xs text-center text-slate-400 mb-1">حالة الاتصال: <span className={`font-bold ${status === 'connected' ? 'text-green-400' : status === 'failed' ? 'text-red-400' : 'text-yellow-400'}`}>{status === 'connected' ? 'متصل' : status === 'failed' ? 'فشل الاتصال' : 'جاري الاتصال...'}</span></div>
+                <div className="flex gap-2">
+                  <button onClick={toggleMute} className={`flex-1 py-3 rounded-lg font-bold transition-all ${isMuted ? 'bg-slate-700 hover:bg-slate-600' : 'btn-primary'}`}>{isMuted ? '🔇 تشغيل' : '🎙️ كتم'}</button>
+                  <button onClick={leaveRoom} className="bg-red-600 hover:bg-red-700 py-3 px-4 rounded-lg font-bold transition-all">خروج</button>
+                </div>
               </div>
             )}
           </div>
