@@ -17,7 +17,6 @@
     .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
     
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes popIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
@@ -187,7 +186,7 @@
     }
 
     // ==========================================
-    // 5. VOICE ROOM COMPONENT
+    // 5. VOICE ROOM COMPONENT (WebRTC Fixed & Restored)
     // ==========================================
     function VoiceRoom({ roomId }) {
       const { currentUser } = useApp();
@@ -195,13 +194,104 @@
       const [isMuted, setIsMuted] = useState(true);
       const [participants, setParticipants] = useState([]);
       const localStreamRef = useRef(null);
+      const pcs = useRef({});
+      const audioElements = useRef({});
       const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
+      const createPeerConnection = (peerId) => {
+        if (pcs.current[peerId]) return pcs.current[peerId];
+        const pc = new RTCPeerConnection(configuration);
+        pcs.current[peerId] = pc;
+
+        if (localStreamRef.current) {
+          localStreamRef.current.getTracks().forEach(track => pc.addTrack(track, localStreamRef.current));
+        }
+
+        pc.ontrack = (event) => {
+          let audio = audioElements.current[peerId];
+          if (!audio) {
+            audio = document.createElement('audio');
+            audio.id = `audio-${peerId}`;
+            audio.autoplay = true;
+            document.body.appendChild(audio);
+            audioElements.current[peerId] = audio;
+          }
+          audio.srcObject = event.streams[0];
+        };
+
+        pc.onicecandidate = (event) => {
+          if (event.candidate) {
+            db.collection(`voiceRooms/${roomId}/iceCandidates`).add({
+              sender: currentUser.uid, to: peerId, candidate: event.candidate.toJSON()
+            });
+          }
+        };
+
+        return pc;
+      };
+
       useEffect(() => {
-        const participantsRef = db.collection(`voiceRooms/${roomId}/participants`);
-        const unsub = participantsRef.onSnapshot(snap => setParticipants(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-        return () => unsub();
-      }, [roomId]);
+        if (!isJoined) return;
+
+        const unsubPart = db.collection(`voiceRooms/${roomId}/participants`).onSnapshot(snap => {
+          const parts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          setParticipants(parts);
+          parts.forEach(p => {
+            if (p.id !== currentUser.uid && !pcs.current[p.id]) {
+              if (currentUser.uid < p.id) {
+                const pc = createPeerConnection(p.id);
+                pc.createOffer().then(offer => {
+                  pc.setLocalDescription(offer);
+                  const callDocId = [currentUser.uid, p.id].sort().join('_');
+                  db.collection(`voiceRooms/${roomId}/calls`).doc(callDocId).set({
+                    caller: currentUser.uid, callee: p.id, offer: { type: offer.type, sdp: offer.sdp }
+                  }, { merge: true });
+                });
+              } else {
+                createPeerConnection(p.id);
+              }
+            }
+          });
+        });
+
+        const unsubCalls = db.collection(`voiceRooms/${roomId}/calls`).onSnapshot(snap => {
+          snap.docChanges().forEach(async change => {
+            if (change.type === 'added' || change.type === 'modified') {
+              const callData = change.doc.data();
+              const peerId = callData.caller === currentUser.uid ? callData.callee : callData.caller;
+              if (peerId === currentUser.uid) return;
+
+              let pc = pcs.current[peerId];
+              if (!pc) pc = createPeerConnection(peerId);
+
+              if (callData.offer && callData.callee === currentUser.uid && !pc.currentRemoteDescription) {
+                await pc.setRemoteDescription(new RTCSessionDescription(callData.offer));
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                await change.doc.ref.update({ answer: { type: answer.type, sdp: answer.sdp } });
+              }
+
+              if (callData.answer && callData.caller === currentUser.uid && !pc.currentRemoteDescription) {
+                await pc.setRemoteDescription(new RTCSessionDescription(callData.answer));
+              }
+            }
+          });
+        });
+
+        const unsubIce = db.collection(`voiceRooms/${roomId}/iceCandidates`).where('to', '==', currentUser.uid).onSnapshot(snap => {
+          snap.docChanges().forEach(async change => {
+            if (change.type === 'added') {
+              const data = change.data();
+              const pc = pcs.current[data.sender];
+              if (pc && pc.remoteDescription) {
+                try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch(e) {}
+              }
+            }
+          });
+        });
+
+        return () => { unsubPart(); unsubCalls(); unsubIce(); };
+      }, [isJoined, roomId]);
 
       const joinRoom = async () => {
         try {
@@ -220,6 +310,10 @@
 
       const leaveRoom = async () => {
         if (localStreamRef.current) localStreamRef.current.getTracks().forEach(t => t.stop());
+        Object.values(pcs.current).forEach(pc => pc.close());
+        pcs.current = {};
+        Object.values(audioElements.current).forEach(a => a.remove());
+        audioElements.current = {};
         await db.collection(`voiceRooms/${roomId}/participants`).doc(currentUser.uid).delete();
         setIsJoined(false);
       };
@@ -484,9 +578,7 @@
                 {messages.map(msg => (
                   <div key={msg.id} className={`flex flex-col ${msg.senderId === currentUser.uid ? 'items-end' : 'items-start'} animate-fadeIn`}>
                     <span className="text-xs text-slate-500 mb-1">{msg.senderName}</span>
-                    <div className={`max-w-[70%] p-3 rounded-lg ${msg.senderId === currentUser.uid ? 'bg-gradient-to-l from-blue-600 to-indigo-600 text-white' : 'bg-slate-700 text-slate-100'}`}>
-                      <p className="text-sm">{msg.text}</p>
-                    </div>
+                    <div className={`max-w-[70%] p-3 rounded-lg ${msg.senderId === currentUser.uid ? 'bg-gradient-to-l from-blue-600 to-indigo-600 text-white' : 'bg-slate-700 text-slate-100'}`}><p className="text-sm">{msg.text}</p></div>
                   </div>
                 ))}
                 <div ref={messagesEndRef} />
@@ -651,7 +743,6 @@
       );
     }
 
-    // NEW PAGE: NOTES
     function Notes() {
       const { currentUser } = useApp();
       const [notes, setNotes] = useState([]);
@@ -663,8 +754,7 @@
       }, []);
 
       const handleAdd = async (e) => {
-        e.preventDefault();
-        if (!text.trim()) return;
+        e.preventDefault(); if (!text.trim()) return;
         await db.collection('notes').add({ text, userId: currentUser.uid, userName: currentUser.name, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
         setText('');
       };
@@ -841,7 +931,7 @@
           case 'workshop-details': pageContent = <WorkshopDetails />; break;
           case 'archive': pageContent = <Archive />; break;
           case 'equipment': pageContent = <Equipment />; break;
-          case 'notes': pageContent = <Notes />; break; // Added Notes Route
+          case 'notes': pageContent = <Notes />; break;
           case 'logs': pageContent = <ActivityLog />; break;
           case 'users': pageContent = <Users />; break;
           case 'profile': pageContent = <Profile />; break;
