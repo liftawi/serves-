@@ -186,7 +186,7 @@
     }
 
     // ==========================================
-    // 5. VOICE ROOM COMPONENT (WebRTC)
+    // 5. VOICE ROOM COMPONENT (WebRTC with Twilio TURN)
     // ==========================================
     function VoiceRoom({ roomId }) {
       const { currentUser } = useApp();
@@ -199,27 +199,25 @@
       const audioElements = useRef({});
       const iceCandidatesQueue = useRef({});
       
+      // دمج خوادم Twilio لضمان عمل الصوت خلف الجدران النارية
       const configuration = {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' },
-          { urls: 'stun:stun3.l.google.com:19302' },
-          { urls: 'stun:stun4.l.google.com:19302' },
+          { urls: 'stun:global.stun.twilio.com:3478' },
           {
-            urls: 'turn:openrelay.metered.ca:80',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
+            username: 'dc2d2894d5a9023620c467b0e71cfa6a35457e6679785ed6ae9856fe5bdfa269',
+            credential: 'tE2DajzSJwnsSbc123',
+            urls: 'turn:global.turn.twilio.com:3478?transport=udp'
           },
           {
-            urls: 'turn:openrelay.metered.ca:443',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
+            username: 'dc2d2894d5a9023620c467b0e71cfa6a35457e6679785ed6ae9856fe5bdfa269',
+            credential: 'tE2DajzSJwnsSbc123',
+            urls: 'turn:global.turn.twilio.com:3478?transport=tcp'
           },
           {
-            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
+            username: 'dc2d2894d5a9023620c467b0e71cfa6a35457e6679785ed6ae9856fe5bdfa269',
+            credential: 'tE2DajzSJwnsSbc123',
+            urls: 'turn:global.turn.twilio.com:443?transport=tcp'
           }
         ]
       };
@@ -238,13 +236,13 @@
             }
           };
 
-          pc.onconnectionstatechange = () => {
-            console.log(`Connection state with ${peerId}: ${pc.connectionState}`);
-            setStatus(pc.connectionState);
+          pc.oniceconnectionstatechange = () => {
+            if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') setStatus('متصل');
+            else if (pc.iceConnectionState === 'failed') setStatus('فشل الاتصال');
+            else if (pc.iceConnectionState === 'disconnected') setStatus('انقطع الاتصال');
           };
 
           pc.ontrack = (event) => {
-            console.log(`Received track from ${peerId}`);
             let audio = audioElements.current[peerId];
             if (!audio) {
               audio = document.createElement('audio');
@@ -270,7 +268,6 @@
         }
       };
 
-      // مستمع دائم لقائمة المشاركين
       useEffect(() => {
         const unsubPart = db.collection(`voiceRooms/${roomId}/participants`).onSnapshot(snap => {
           setParticipants(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -278,7 +275,6 @@
         return () => unsubPart();
       }, [roomId]);
 
-      // منطق WebRTC (يعمل بعد الدخول للغرفة)
       useEffect(() => {
         if (!isJoined) return;
 
@@ -320,6 +316,7 @@
                   for (const c of iceCandidatesQueue.current[peerId]) {
                     try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e) {}
                   }
+                  iceCandidatesQueue.current[peerId] = [];
                 }
                 const answer = await pc.createAnswer();
                 await pc.setLocalDescription(answer);
@@ -332,6 +329,7 @@
                   for (const c of iceCandidatesQueue.current[peerId]) {
                     try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e) {}
                   }
+                  iceCandidatesQueue.current[peerId] = [];
                 }
               }
             }
@@ -413,7 +411,7 @@
               <button onClick={joinRoom} className="w-full btn-primary py-3 rounded-lg font-bold text-white">الدخول للغرفة</button>
             ) : (
               <div className="flex flex-col gap-2">
-                <div className="text-xs text-center text-slate-400 mb-1">حالة الاتصال: <span className={`font-bold ${status === 'connected' ? 'text-green-400' : status === 'failed' ? 'text-red-400' : 'text-yellow-400'}`}>{status === 'connected' ? 'متصل' : status === 'failed' ? 'فشل الاتصال' : 'جاري الاتصال...'}</span></div>
+                <div className="text-xs text-center text-slate-400 mb-1">حالة الاتصال: <span className={`font-bold ${status === 'متصل' ? 'text-green-400' : status === 'فشل الاتصال' ? 'text-red-400' : 'text-yellow-400'}`}>{status}</span></div>
                 <div className="flex gap-2">
                   <button onClick={toggleMute} className={`flex-1 py-3 rounded-lg font-bold transition-all ${isMuted ? 'bg-slate-700 hover:bg-slate-600' : 'btn-primary'}`}>{isMuted ? '🔇 تشغيل' : '🎙️ كتم'}</button>
                   <button onClick={leaveRoom} className="bg-red-600 hover:bg-red-700 py-3 px-4 rounded-lg font-bold transition-all">خروج</button>
