@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Company OS - نظام إدارة الورشات</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
+    
+    /* Animations */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .animate-fadeIn { animation: fadeIn 0.4s ease-out forwards; }
+    .animate-popIn { animation: popIn 0.2s ease-out forwards; }
+    
+    .glass-card {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(71, 85, 105, 0.5);
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #3b82f6, #6366f1);
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+    }
+    .card-hover {
+      transition: all 0.3s ease;
+    }
+    .card-hover:hover {
+      transform: translateY(-3px);
+      border-color: #3b82f6;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100">
+  <div id="root">
+    <div style="text-align:center; padding-top:50px; color:#94a3b8; font-family:sans-serif;">
+      <h2 style="font-size:24px; font-weight:bold;">جاري تحميل نظام الشركة...</h2>
+    </div>
+  </div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, createContext, useContext } = React;
+
+    // ==========================================
+    // 1. FIREBASE CONFIG
+    // ==========================================
+    const firebaseConfig = {
+      apiKey: "AIzaSyAW5hloWZsoTne4M_m85cEbQIKlqBbzsPM",
+      authDomain: "serves-eb48d.firebaseapp.com",
+      databaseURL: "https://serves-eb48d-default-rtdb.firebaseio.com",
+      projectId: "serves-eb48d",
+      storageBucket: "serves-eb48d.firebasestorage.app",
+      messagingSenderId: "540201486445",
+      appId: "1:540201486445:web:6cef46a7f54cf8c348d764",
+      measurementId: "G-W5F206YMJ7"
+    };
+
+    const app = firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    // ==========================================
+    // 2. ACTIVITY LOGGER
+    // ==========================================
+    async function logActivity({ userId, userName, type, action, entityId, entityName, oldValue, newValue, workshopId = null }) {
+      try {
+        await db.collection('activity_logs').add({
+          userId, userName, type, action, entityId, entityName,
+          oldValue: oldValue || null, newValue: newValue || null,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      } catch (error) { console.error("Log Error:", error); }
+    }
+
+    // ==========================================
+    // 3. APP CONTEXT & AUTH
+    // ==========================================
+    const AppContext = createContext();
+    function useApp() { return useContext(AppContext); }
+
+    function AppProvider({ children }) {
+      const [currentUser, setCurrentUser] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [route, setRoute] = useState({ page: 'dashboard', id: null });
+
+      function login(email, password) { return auth.signInWithEmailAndPassword(email, password); }
+      
+      async function logout() {
+        if (auth.currentUser) {
+          await db.collection('users').doc(auth.currentUser.uid).update({ status: 'offline' });
+          await auth.signOut();
+        }
+      }
+      
+      function navigate(page, id = null) { setRoute({ page, id }); window.scrollTo(0, 0); }
+
+      useEffect(() => {
+        const unsub = auth.onAuthStateChanged(async user => {
+          if (user) {
+            const userRef = db.collection('users').doc(user.uid);
+            const userDoc = await userRef.get();
+            if (!userDoc.exists) {
+              await userRef.set({ email: user.email, name: user.email, status: 'online' });
+            } else {
+              await userRef.update({ status: 'online' });
+            }
+            const userData = userDoc.exists ? userDoc.data() : { name: user.email };
+            setCurrentUser({ uid: user.uid, email: user.email, name: userData.name || user.email });
+          } else {
+            setCurrentUser(null);
+          }
+          setLoading(false);
+        });
+        return unsub;
+      }, []);
+
+      return (
+        <AppContext.Provider value={{ currentUser, login, logout, route, navigate }}>
+          {children}
+        </AppContext.Provider>
+      );
+    }
+
+    // ==========================================
+    // 4. LAYOUT COMPONENTS
+    // ==========================================
+    function Layout({ children }) {
+      return (
+        <div className="flex h-screen bg-slate-900 text-slate-100">
+          <Sidebar />
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <Topbar />
+            <main className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar">
+              {children}
+            </main>
+          </div>
+        </div>
+      );
+    }
+
+    function Sidebar() {
+      const { navigate, route, currentUser } = useApp();
+      const navItems = [
+        { name: 'الرئيسية', page: 'dashboard', icon: '🏠' },
+        { name: 'الشات العام', page: 'chat', icon: '💬' },
+        { name: 'الورشات الحالية', page: 'workshops', icon: '🛠️' },
+        { name: 'أرشيف الورشات', page: 'archive', icon: '📚' },
+        { name: 'المعدات', page: 'equipment', icon: '🔧' },
+        { name: 'سجل النشاط', page: 'logs', icon: '📜' },
+        { name: 'الموظفون', page: 'users', icon: '👥' },
+        { name: 'حسابي', page: 'profile', icon: '⚙️' },
+      ];
+      return (
+        <aside className="w-64 bg-slate-800/80 backdrop-blur-md border-l border-slate-700 flex-col hidden md:flex shrink-0">
+          <div className="h-16 flex items-center justify-center border-b border-slate-700">
+            <h1 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Company OS</h1>
+          </div>
+          <nav className="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
+            {navItems.map(item => (
+              <button key={item.page} onClick={() => navigate(item.page)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 text-right ${route.page === item.page ? 'bg-gradient-to-l from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-700/50 hover:text-white'}`}>
+                <span className="text-lg">{item.icon}</span>
+                <span className="font-medium">{item.name}</span>
+              </button>
+            ))}
+          </nav>
+          <div className="p-4 border-t border-slate-700">
+            <div className="flex items-center gap-3 bg-slate-900/50 p-3 rounded-lg">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 flex items-center justify-center text-sm font-bold">{currentUser?.name?.charAt(0).toUpperCase()}</div>
+              <div className="flex-1 overflow-hidden">
+                <p className="text-sm font-bold truncate">{currentUser?.name}</p>
+                <p className="text-xs text-green-400 flex items-center gap-1"><span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span> متصل الآن</p>
+              </div>
+            </div>
+          </div>
+        </aside>
+      );
+    }
+
+    function Topbar() {
+      const { logout } = useApp();
+      return (
+        <header className="h-16 bg-slate-800/80 backdrop-blur-md border-b border-slate-700 flex items-center justify-between px-6 shrink-0">
+          <div className="text-slate-300 text-sm md:text-base font-medium">نظام إدارة الورشات الداخلي</div>
+          <button onClick={logout} className="bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white px-4 py-2 rounded-lg text-sm transition-all duration-300">تسجيل الخروج</button>
+        </header>
+      );
+    }
+
+    // ==========================================
+    // 5. VOICE ROOM COMPONENT
+    // ==========================================
+    function VoiceRoom({ roomId }) {
+      const { currentUser } = useApp();
+      const [isJoined, setIsJoined] = useState(false);
+      const [isMuted, setIsMuted] = useState(true);
+      const [participants, setParticipants] = useState([]);
+      const localStreamRef = useRef(null);
+      const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+      useEffect(() => {
+        const participantsRef = db.collection(`voiceRooms/${roomId}/participants`);
+        const unsub = participantsRef.onSnapshot(snap => {
+          setParticipants(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+        return () => unsub();
+      }, [roomId]);
+
+      const joinRoom = async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          localStreamRef.current = stream;
+          stream.getAudioTracks()[0].enabled = false;
+          await db.collection(`voiceRooms/${roomId}/participants`).doc(currentUser.uid).set({ name: currentUser.name, isMuted: true });
+          setIsJoined(true); setIsMuted(true);
+        } catch (error) { alert("يرجى السماح بالوصول إلى الميكروفون."); }
+      };
+
+      const toggleMute = async () => {
+        const newState = !isMuted; setIsMuted(newState);
+        if (localStreamRef.current) localStreamRef.current.getAudioTracks()[0].enabled = !newState;
+        await db.collection(`voiceRooms/${roomId}/participants`).doc(currentUser.uid).update({ isMuted: newState });
+      };
+
+      const leaveRoom = async () => {
+        if (localStreamRef.current) localStreamRef.current.getTracks().forEach(t => t.stop());
+        await db.collection(`voiceRooms/${roomId}/participants`).doc(currentUser.uid).delete();
+        setIsJoined(false);
+      };
+
+      useEffect(() => { return () => { if (isJoined) leaveRoom(); }; }, []);
+
+      return (
+        <div className="glass-card h-full rounded-xl flex flex-col">
+          <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
+            <h3 className="font-bold flex items-center gap-2"><span className="text-xl">🎙️</span> غرفة الصوت</h3>
+            <span className="text-xs text-slate-400 bg-slate-900/50 px-2 py-1 rounded">{participants.length} متصل</span>
+          </div>
+          <div className="flex-1 p-4 overflow-y-auto space-y-2 custom-scrollbar">
+            {participants.map(p => (
+              <div key={p.id} className="flex items-center justify-between bg-slate-900/40 p-3 rounded-lg animate-fadeIn">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 flex items-center justify-center text-sm font-bold">{p.name?.charAt(0).toUpperCase()}</div>
+                  <span className="text-sm">{p.name}</span>
+                </div>
+                {p.isMuted ? <span className="text-red-400 text-xs">🔇</span> : <span className="text-green-400 text-xs animate-pulse">🎙️</span>}
+              </div>
+            ))}
+            {!isJoined && <p className="text-center text-slate-500 text-sm mt-4">أنت لست في الغرفة</p>}
+          </div>
+          <div className="p-4 border-t border-slate-700/50">
+            {!isJoined ? (
+              <button onClick={joinRoom} className="w-full btn-primary py-3 rounded-lg font-bold text-white">الدخول للغرفة</button>
+            ) : (
+              <div className="flex gap-2">
+                <button onClick={toggleMute} className={`flex-1 py-3 rounded-lg font-bold transition-all ${isMuted ? 'bg-slate-700 hover:bg-slate-600' : 'btn-primary'}`}>{isMuted ? '🔇 تشغيل' : '🎙️ كتم'}</button>
+                <button onClick={leaveRoom} className="bg-red-600 hover:bg-red-700 py-3 px-4 rounded-lg font-bold transition-all">خروج</button>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 6. PAGES
+    // ==========================================
+    function Login() {
+      const [email, setEmail] = useState('');
+      const [password, setPassword] = useState('');
+      const [error, setError] = useState('');
+      const [loading, setLoading] = useState(false);
+      const { login } = useApp();
+
+      async function handleSubmit(e) {
+        e.preventDefault(); setError(''); setLoading(true);
+        try { await login(email, password); } 
+        catch (err) { setError('بيانات الدخول غير صحيحة.'); }
+        setLoading(false);
+      }
+
+      return (
+        <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center px-4 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-96 h-96 bg-blue-600/20 rounded-full filter blur-[100px] animate-pulse"></div>
+          <div className="absolute bottom-0 right-0 w-96 h-96 bg-indigo-600/20 rounded-full filter blur-[100px] animate-pulse"></div>
+          
+          <div className="max-w-md w-full glass-card p-8 rounded-2xl shadow-2xl z-10 animate-popIn">
+            <div className="text-center mb-8">
+              <h2 className="mt-4 text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Company Name</h2>
+              <p className="mt-2 text-sm text-slate-400">المنصة الداخلية لإدارة الورشات</p>
+            </div>
+            {error && <div className="mb-4 bg-red-500/10 text-red-400 text-sm p-3 rounded-lg text-center">{error}</div>}
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="البريد الإلكتروني" className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 text-white outline-none focus:border-blue-500 transition-all" />
+              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="كلمة المرور" className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 text-white outline-none focus:border-blue-500 transition-all" />
+              <button type="submit" disabled={loading} className="w-full btn-primary py-3 rounded-lg font-bold text-white disabled:opacity-50">
+                {loading ? 'جاري التحميل...' : 'تسجيل الدخول'}
+              </button>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    function Dashboard() {
+      const [stats, setStats] = useState({ activeWorkshops: 0, availableEquipment: 0, users: 0 });
+      useEffect(() => {
+        const unsubW = db.collection('workshops').where('status', '==', 'active').onSnapshot(snap => setStats(p => ({...p, activeWorkshops: snap.size})));
+        const unsubE = db.collection('equipment').where('status', '==', 'available').onSnapshot(snap => setStats(p => ({...p, availableEquipment: snap.size})));
+        const unsubU = db.collection('users').where('status', '==', 'online').onSnapshot(snap => setStats(p => ({...p, users: snap.size})));
+        return () => { unsubW(); unsubE(); unsubU(); };
+      }, []);
+
+      const cards = [
+        { title: 'الورشات النشطة', value: stats.activeWorkshops, color: 'from-green-500 to-emerald-500', icon: '🛠️' },
+        { title: 'المعدات المتوفرة', value: stats.availableEquipment, color: 'from-blue-500 to-cyan-500', icon: '🔧' },
+        { title: 'الموظفون المتصلون', value: stats.users, color: 'from-purple-500 to-indigo-500', icon: '🟢' },
+      ];
+
+      return (
+        <div className="space-y-6 animate-fadeIn">
+          <h2 className="text-2xl font-bold">نظرة عامة على النظام</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {cards.map((card, i) => (
+              <div key={i} className="glass-card p-6 rounded-2xl flex items-center justify-between card-hover">
+                <div>
+                  <p className="text-slate-400 text-sm mb-1">{card.title}</p>
+                  <h3 className="text-3xl font-bold">{card.value}</h3>
+                </div>
+                <div className={`p-4 rounded-xl bg-gradient-to-br ${card.color} text-2xl shadow-lg`}>{card.icon}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function Workshops() {
+      const { currentUser, navigate } = useApp();
+      const [workshops, setWorkshops] = useState([]);
+      const [isModalOpen, setIsModalOpen] = useState(false);
+      const [name, setName] = useState('');
+      const [location, setLocation] = useState('');
+
+      useEffect(() => {
+        const unsub = db.collection('workshops').where('status', '==', 'active').onSnapshot(snap => {
+          setWorkshops(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+        return () => unsub();
+      }, []);
+
+      const handleCreate = async (e) => {
+        e.preventDefault();
+        const docRef = await db.collection('workshops').add({
+          name, location, status: 'active', createdBy: currentUser.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp(), participants: [], equipment: []
+        });
+        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'workshop', action: 'create', entityId: docRef.id, entityName: name, newValue: 'active' });
+        setName(''); setLocation(''); setIsModalOpen(false);
+      };
+
+      return (
+        <div className="animate-fadeIn">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold">الورشات الحالية</h2>
+            <button onClick={() => setIsModalOpen(true)} className="btn-primary px-4 py-2 rounded-lg font-medium text-white">+ إنشاء ورشة</button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {workshops.map(ws => (
+              <button onClick={() => navigate('workshop-details', ws.id)} key={ws.id} className="text-right glass-card p-5 rounded-xl card-hover">
+                <h3 className="text-lg font-bold mb-2 text-blue-400">{ws.name}</h3>
+                <p className="text-slate-400 text-sm">📍 {ws.location}</p>
+                <div className="mt-4 flex justify-between items-center text-xs">
+                  <span className="bg-green-500/10 text-green-400 px-2 py-1 rounded">🟢 نشطة</span>
+                  <span className="text-slate-500">{ws.participants?.length || 0} موظفين | {ws.equipment?.length || 0} معدات</span>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {isModalOpen && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+              <div className="glass-card p-6 rounded-2xl w-full max-w-md animate-popIn">
+                <h3 className="text-xl font-bold mb-4">إنشاء ورشة جديدة</h3>
+                <form onSubmit={handleCreate} className="space-y-4">
+                  <input type="text" placeholder="اسم الورشة" value={name} onChange={e=>setName(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
+                  <input type="text" placeholder="الموقع" value={location} onChange={e=>setLocation(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
+                  <div className="flex gap-3">
+                    <button type="submit" className="flex-1 btn-primary py-3 rounded-lg font-medium text-white">إنشاء</button>
+                    <button type="button" onClick={()=>setIsModalOpen(false)} className="flex-1 bg-slate-700 hover:bg-slate-600 py-3 rounded-lg font-medium">إلغاء</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function WorkshopDetails() {
+      const { route: { id }, currentUser, navigate } = useApp();
+      const [workshop, setWorkshop] = useState(null);
+      const [messages, setMessages] = useState([]);
+      const [newMsg, setNewMsg] = useState('');
+      const [availableEquipment, setAvailableEquipment] = useState([]);
+      const [allUsers, setAllUsers] = useState([]);
+      const messagesEndRef = useRef(null);
+
+      useEffect(() => {
+        const unsubWs = db.collection('workshops').doc(id).onSnapshot(doc => { if(doc.exists) setWorkshop({ id: doc.id, ...doc.data() }); });
+        const unsubMsgs = db.collection(`workshops/${id}/messages`).onSnapshot(snap => setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b)=>a.timestamp - b.timestamp)));
+        const unsubEqAvailable = db.collection('equipment').where('status', '==', 'available').onSnapshot(snap => setAvailableEquipment(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        const unsubUsers = db.collection('users').onSnapshot(snap => setAllUsers(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        return () => { unsubWs(); unsubMsgs(); unsubEqAvailable(); unsubUsers(); };
+      }, [id]);
+
+      useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+
+      const sendMessage = async (e) => {
+        e.preventDefault();
+        if (!newMsg.trim()) return;
+        await db.collection(`workshops/${id}/messages`).add({ text: newMsg, senderId: currentUser.uid, senderName: currentUser.name, timestamp: firebase.firestore.FieldValue.serverTimestamp() });
+        setNewMsg('');
+      };
+
+      const addEquipment = async (eqId, eqName, eqSerial) => {
+        const eqObj = { id: eqId, name: eqName, serial: eqSerial };
+        const updated = [...(workshop.equipment || []), eqObj];
+        await db.collection('workshops').doc(id).update({ equipment: updated });
+        // Update Equipment Doc with Workshop Name
+        await db.collection('equipment').doc(eqId).update({ status: 'in_use', currentWorkshop: id, currentWorkshopName: workshop.name });
+        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'equipment', action: 'assign', entityId: eqId, entityName: eqName, newValue: workshop.name, workshopId: id });
+      };
+
+      const removeEquipment = async (eqId) => {
+        const updated = workshop.equipment.filter(eq => eq.id !== eqId);
+        await db.collection('workshops').doc(id).update({ equipment: updated });
+        // Clear Workshop Name from Equipment
+        await db.collection('equipment').doc(eqId).update({ status: 'available', currentWorkshop: null, currentWorkshopName: null });
+      };
+
+      const addParticipant = async (userId, userName) => {
+        const updated = [...(workshop.participants || []), { id: userId, name: userName }];
+        await db.collection('workshops').doc(id).update({ participants: updated });
+        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'workshop', action: 'add_participant', entityId: id, entityName: workshop.name, newValue: userName, workshopId: id });
+      };
+
+      const removeParticipant = async (userId) => {
+        const updated = workshop.participants.filter(p => p.id !== userId);
+        await db.collection('workshops').doc(id).update({ participants: updated });
+      };
+
+      const handleEndWorkshop = async () => {
+        if (!window.confirm("هل أنت متأكد من إنهاء هذه الورشة؟")) return;
+        const batch = db.batch();
+        workshop.equipment.forEach(eq => {
+          const ref = db.collection('equipment').doc(eq.id);
+          batch.update(ref, { status: 'available', currentWorkshop: null, currentWorkshopName: null });
+        });
+        await batch.commit();
+        await db.collection('workshops').doc(id).update({ status: 'archived', endedAt: firebase.firestore.FieldValue.serverTimestamp(), endedBy: currentUser.uid });
+        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'workshop', action: 'end_workshop', entityId: id, entityName: workshop.name, oldValue: 'active', newValue: 'archived', workshopId: id });
+        navigate('workshops');
+      };
+
+      if (!workshop) return <div className="text-center text-slate-400 mt-10 animate-pulse">جاري التحميل...</div>;
+
+      return (
+        <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-120px)] animate-fadeIn">
+          <div className="flex-1 flex flex-col">
+            <div className="glass-card p-4 rounded-xl mb-4 flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-bold">{workshop.name}</h2>
+                <p className="text-slate-400 text-sm">📍 {workshop.location} | {workshop.status === 'active' ? '🟢 نشطة' : '✅ منتهية'}</p>
+              </div>
+              {workshop.status === 'active' && <button onClick={handleEndWorkshop} className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-sm font-medium transition-all">✅ إنهاء الورشة</button>}
+            </div>
+
+            <div className="glass-card p-4 rounded-xl mb-4">
+              <h3 className="text-sm font-bold text-slate-300 mb-3">👥 المشاركون ({workshop.participants?.length || 0})</h3>
+              <div className="flex flex-wrap gap-2">
+                {workshop.participants?.map(p => (
+                  <div key={p.id} className="flex items-center gap-2 bg-blue-500/10 text-blue-400 px-3 py-1 rounded-full text-xs">
+                    {p.name}
+                    {workshop.status === 'active' && <button onClick={() => removeParticipant(p.id)} className="text-red-400 font-bold hover:text-red-300">x</button>}
+                  </div>
+                ))}
+                {workshop.status === 'active' && (
+                  <select onChange={(e) => { const u = allUsers.find(u => u.id === e.target.value); if(u) addParticipant(u.id, u.name); }} value="" className="bg-slate-700 text-slate-300 px-3 py-1 rounded-full text-xs outline-none">
+                    <option value="">+ إضافة موظف</option>
+                    {allUsers.filter(u => !workshop.participants?.some(p => p.id === u.id)).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                  </select>
+                )}
+              </div>
+            </div>
+
+            <div className="glass-card p-4 rounded-xl mb-4">
+              <h3 className="text-sm font-bold text-slate-300 mb-3">🔧 المعدات ({workshop.equipment?.length || 0})</h3>
+              <div className="flex flex-wrap gap-2">
+                {workshop.equipment?.map(eq => (
+                  <div key={eq.id} className="flex items-center gap-2 bg-orange-500/10 text-orange-400 px-3 py-1 rounded-full text-xs">
+                    {eq.name} ({eq.serial})
+                    {workshop.status === 'active' && <button onClick={() => removeEquipment(eq.id)} className="text-red-400 font-bold hover:text-red-300">x</button>}
+                  </div>
+                ))}
+                {workshop.status === 'active' && availableEquipment.length > 0 && (
+                  <select onChange={(e) => { const eq = availableEquipment.find(eq => eq.id === e.target.value); if(eq) addEquipment(eq.id, eq.name, eq.serial); }} value="" className="bg-slate-700 text-slate-300 px-3 py-1 rounded-full text-xs outline-none">
+                    <option value="">+ إضافة معدة</option>
+                    {availableEquipment.map(eq => <option key={eq.id} value={eq.id}>{eq.name} ({eq.serial})</option>)}
+                  </select>
+                )}
+              </div>
+            </div>
+
+            <div className="flex-1 glass-card rounded-xl flex flex-col overflow-hidden">
+              <div className="flex-1 p-4 overflow-y-auto space-y-3 custom-scrollbar">
+                {messages.map(msg => (
+                  <div key={msg.id} className={`flex flex-col ${msg.senderId === currentUser.uid ? 'items-end' : 'items-start'} animate-fadeIn`}>
+                    <span className="text-xs text-slate-500 mb-1">{msg.senderName}</span>
+                    <div className={`max-w-[70%] p-3 rounded-lg ${msg.senderId === currentUser.uid ? 'bg-gradient-to-l from-blue-600 to-indigo-600 text-white' : 'bg-slate-700 text-slate-100'}`}>
+                      <p className="text-sm">{msg.text}</p>
+                    </div>
+                  </div>
+                ))}
+                <div ref={messagesEndRef} />
+              </div>
+              {workshop.status === 'active' ? (
+                <form onSubmit={sendMessage} className="p-4 border-t border-slate-700/50 flex gap-2">
+                  <input type="text" value={newMsg} onChange={e=>setNewMsg(e.target.value)} placeholder="اكتب رسالة..." className="flex-1 bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
+                  <button type="submit" className="btn-primary px-6 rounded-lg font-medium text-white">إرسال</button>
+                </form>
+              ) : <div className="p-4 border-t border-slate-700/50 text-center text-slate-500 text-sm">هذه الورشة منتهية، الشات للقراءة فقط.</div>}
+            </div>
+          </div>
+          {workshop.status === 'active' && <div className="w-full lg:w-80 xl:w-96"><VoiceRoom roomId={id} /></div>}
+        </div>
+      );
+    }
+
+    function GeneralChat() {
+      const { currentUser } = useApp();
+      const [messages, setMessages] = useState([]);
+      const [newMsg, setNewMsg] = useState('');
+      const messagesEndRef = useRef(null);
+
+      useEffect(() => {
+        const unsub = db.collection('general_chat').orderBy('timestamp', 'asc').onSnapshot(snap => setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        return () => unsub();
+      }, []);
+
+      useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+
+      const sendMessage = async (e) => {
+        e.preventDefault();
+        if (!newMsg.trim()) return;
+        await db.collection('general_chat').add({ text: newMsg, senderId: currentUser.uid, senderName: currentUser.name, timestamp: firebase.firestore.FieldValue.serverTimestamp() });
+        setNewMsg('');
+      };
+
+      return (
+        <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-120px)] animate-fadeIn">
+          <div className="flex-1 flex flex-col">
+            <div className="glass-card p-4 rounded-xl mb-4 flex items-center gap-3">
+              <span className="text-2xl">💬</span>
+              <div><h2 className="text-xl font-bold">الشات العام</h2><p className="text-slate-400 text-sm">مساحة التواصل المفتوح</p></div>
+            </div>
+            <div className="flex-1 glass-card rounded-xl flex flex-col overflow-hidden">
+              <div className="flex-1 p-4 overflow-y-auto space-y-3 custom-scrollbar">
+                {messages.map(msg => (
+                  <div key={msg.id} className={`flex flex-col ${msg.senderId === currentUser.uid ? 'items-end' : 'items-start'} animate-fadeIn`}>
+                    <span className="text-xs text-slate-500 mb-1">{msg.senderName}</span>
+                    <div className={`max-w-[70%] p-3 rounded-lg ${msg.senderId === currentUser.uid ? 'bg-gradient-to-l from-blue-600 to-indigo-600 text-white' : 'bg-slate-700 text-slate-100'}`}>
+                      <p className="text-sm">{msg.text}</p>
+                    </div>
+                  </div>
+                ))}
+                <div ref={messagesEndRef} />
+              </div>
+              <form onSubmit={sendMessage} className="p-4 border-t border-slate-700/50 flex gap-2">
+                <input type="text" value={newMsg} onChange={e=>setNewMsg(e.target.value)} placeholder="اكتب رسالة للجميع..." className="flex-1 bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
+                <button type="submit" className="btn-primary px-6 rounded-lg font-medium text-white">إرسال</button>
+              </form>
+            </div>
+          </div>
+          <div className="w-full lg:w-80 xl:w-96">
+            <VoiceRoom roomId="general_chat_voice" />
+          </div>
+        </div>
+      );
+    }
+
+    function Archive() {
+      const { navigate } = useApp();
+      const [archived, setArchived] = useState([]);
+      useEffect(() => {
+        const unsub = db.collection('workshops').where('status', '==', 'archived').onSnapshot(snap => setArchived(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        return () => unsub();
+      }, []);
+
+      return (
+        <div className="animate-fadeIn">
+          <h2 className="text-2xl font-bold mb-6">📚 أرشيف الورشات المنتهية</h2>
+          {archived.length === 0 ? <div className="text-center text-slate-500 mt-20"><p>لا يوجد أرشيف حالياً</p></div> : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {archived.map(ws => (
+                <button onClick={() => navigate('workshop-details', ws.id)} key={ws.id} className="text-right glass-card p-5 rounded-xl card-hover opacity-90 hover:opacity-100">
+                  <h3 className="text-lg font-bold mb-2 text-slate-300">{ws.name}</h3>
+                  <p className="text-slate-500 text-sm">📍 {ws.location}</p>
+                  <div className="mt-4 flex justify-between items-center text-xs">
+                    <span className="bg-slate-700/50 text-slate-400 px-2 py-1 rounded">✅ منتهية</span>
+                    <span className="text-slate-600">{ws.equipment?.length || 0} معدات | {ws.participants?.length || 0} موظفين</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function Equipment() {
+      const { currentUser } = useApp();
+      const [equipment, setEquipment] = useState([]);
+      const [isModalOpen, setIsModalOpen] = useState(false);
+      const [name, setName] = useState('');
+      const [serial, setSerial] = useState('');
+
+      useEffect(() => {
+        const unsub = db.collection('equipment').onSnapshot(snap => setEquipment(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        return () => unsub();
+      }, []);
+
+      const handleAdd = async (e) => {
+        e.preventDefault();
+        const docRef = await db.collection('equipment').add({ name, serial, status: 'available', createdAt: firebase.firestore.FieldValue.serverTimestamp(), currentWorkshopName: null });
+        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'equipment', action: 'add', entityId: docRef.id, entityName: name, newValue: 'available' });
+        setName(''); setSerial(''); setIsModalOpen(false);
+      };
+
+      const handleDelete = async (eqId, eqName) => {
+        if (!window.confirm(`هل أنت متأكد من حذف المعدة "${eqName}"؟`)) return;
+        await db.collection('equipment').doc(eqId).delete();
+        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'equipment', action: 'delete', entityId: eqId, entityName: eqName });
+      };
+
+      const statusStyles = { available: 'bg-green-500/10 text-green-400', in_use: 'bg-orange-500/10 text-orange-400', maintenance: 'bg-red-500/10 text-red-400' };
+
+      return (
+        <div className="animate-fadeIn">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold">إدارة المعدات</h2>
+            <button onClick={() => setIsModalOpen(true)} className="btn-primary px-4 py-2 rounded-lg font-medium text-white">+ إضافة معدة</button>
+          </div>
+          <div className="glass-card rounded-xl overflow-hidden overflow-x-auto">
+            <table className="w-full text-right min-w-[600px]">
+              <thead className="bg-slate-900/50 text-slate-400 text-sm">
+                <tr><th className="p-4">اسم المعدة</th><th className="p-4">الرقم التسلسلي</th><th className="p-4">الحالة</th><th className="p-4">الموقع الحالي</th><th className="p-4 text-center">إجراءات</th></tr>
+              </thead>
+              <tbody>
+                {equipment.map(eq => (
+                  <tr key={eq.id} className="border-t border-slate-700/50 hover:bg-slate-700/20 transition-colors">
+                    <td className="p-4 font-medium">{eq.name}</td>
+                    <td className="p-4 text-slate-400">{eq.serial}</td>
+                    <td className="p-4"><span className={`px-3 py-1 rounded-full text-xs ${statusStyles[eq.status]}`}>{eq.status === 'available' ? '🟢 متوفرة' : eq.status === 'in_use' ? '🟠 مستخدمة' : '🔴 صيانة'}</span></td>
+                    <td className="p-4 text-slate-400 text-sm">{eq.currentWorkshopName || '—'}</td>
+                    <td className="p-4 text-center">
+                      <button onClick={() => handleDelete(eq.id, eq.name)} className="text-red-400 hover:text-red-300 text-sm font-medium transition-colors">حذف</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {isModalOpen && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+              <div className="glass-card p-6 rounded-2xl w-full max-w-md animate-popIn">
+                <h3 className="text-xl font-bold mb-4">إضافة معدة جديدة</h3>
+                <form onSubmit={handleAdd} className="space-y-4">
+                  <input type="text" placeholder="اسم المعدة" value={name} onChange={e=>setName(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
+                  <input type="text" placeholder="الرقم التسلسلي" value={serial} onChange={e=>setSerial(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
+                  <div className="flex gap-3">
+                    <button type="submit" className="flex-1 btn-primary py-3 rounded-lg font-medium text-white">إضافة</button>
+                    <button type="button" onClick={()=>setIsModalOpen(false)} className="flex-1 bg-slate-700 hover:bg-slate-600 py-3 rounded-lg font-medium">إلغاء</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function ActivityLog() {
+      const [logs, setLogs] = useState([]);
+      const [filter, setFilter] = useState('all');
+
+      useEffect(() => {
+        const unsub = db.collection('activity_logs').orderBy('timestamp', 'desc').onSnapshot(snap => setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        return () => unsub();
+      }, []);
+
+      const filteredLogs = logs.filter(log => filter === 'all' || log.type === filter);
+      const filters = [{ id: 'all', label: 'الكل' }, { id: 'workshop', label: 'الورشات' }, { id: 'equipment', label: 'المعدات' }, { id: 'user', label: 'الموظفون' }];
+      const getTypeStyle = (type) => type === 'workshop' ? 'bg-blue-500/10 text-blue-400' : type === 'equipment' ? 'bg-orange-500/10 text-orange-400' : 'bg-slate-500/10 text-slate-400';
+
+      return (
+        <div className="animate-fadeIn">
+          <h2 className="text-2xl font-bold mb-6">سجل النشاط</h2>
+          <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+            {filters.map(f => <button key={f.id} onClick={() => setFilter(f.id)} className={`px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-all ${filter === f.id ? 'btn-primary text-white' : 'glass-card text-slate-400 hover:text-white'}`}>{f.label}</button>)}
+          </div>
+          <div className="space-y-3">
+            {filteredLogs.map(log => (
+              <div key={log.id} className="glass-card p-4 rounded-xl flex items-start gap-4 animate-fadeIn">
+                <div className={`px-2 py-1 rounded text-xs font-bold ${getTypeStyle(log.type)}`}>{log.type}</div>
+                <div className="flex-1">
+                  <p className="text-sm"><span className="font-bold text-blue-400">{log.userName}</span> {log.action === 'create' ? 'أنشأ' : log.action === 'end_workshop' ? 'أنهى' : log.action === 'assign' ? 'أضاف معدة إلى' : log.action === 'delete' ? 'حذف' : 'عدّل'} <span className="font-bold">{log.entityName}</span></p>
+                  {log.oldValue && log.newValue && <div className="mt-2 text-xs bg-slate-900/50 p-2 rounded flex gap-4"><span className="text-red-400">قبل: {log.oldValue}</span><span className="text-green-400">بعد: {log.newValue}</span></div>}
+                  <span className="text-xs text-slate-500 mt-1 block">{log.timestamp?.toDate().toLocaleString('ar-EG') || ''}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function Users() {
+      const { currentUser } = useApp();
+      const [users, setUsers] = useState([]);
+      const [isModalOpen, setIsModalOpen] = useState(false);
+      const [email, setEmail] = useState('');
+      const [password, setPassword] = useState('');
+      const [name, setName] = useState('');
+
+      useEffect(() => {
+        const unsub = db.collection('users').onSnapshot(snap => setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        return () => unsub();
+      }, []);
+
+      const handleAddUser = async (e) => {
+        e.preventDefault();
+        try {
+          const secondaryApp = firebase.initializeApp(firebaseConfig, "Secondary_" + Date.now());
+          const secondaryAuth = secondaryApp.auth();
+          const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, password);
+          await db.collection('users').doc(userCredential.user.uid).set({ email, name, status: 'offline' });
+          await secondaryAuth.signOut();
+          await secondaryApp.delete();
+          setEmail(''); setPassword(''); setName(''); setIsModalOpen(false);
+        } catch (error) { alert("خطأ في إنشاء الحساب: " + error.message); }
+      };
+
+      return (
+        <div className="animate-fadeIn">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold">الموظفون</h2>
+            <button onClick={() => setIsModalOpen(true)} className="btn-primary px-4 py-2 rounded-lg font-medium text-white">+ إضافة موظف</button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {users.map(user => (
+              <div key={user.id} className="glass-card p-4 rounded-xl flex items-center gap-4 card-hover">
+                <div className="relative">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 flex items-center justify-center text-xl font-bold">{user.name?.charAt(0).toUpperCase()}</div>
+                  <span className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-slate-800 ${user.status === 'online' ? 'bg-green-500' : 'bg-slate-500'}`}></span>
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg">{user.name}</h3>
+                  <p className="text-xs text-slate-500">{user.email}</p>
+                  <p className={`text-xs ${user.status === 'online' ? 'text-green-400' : 'text-slate-500'}`}>{user.status === 'online' ? '🟢 متصل' : '⚫ غير متصل'}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {isModalOpen && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+              <div className="glass-card p-6 rounded-2xl w-full max-w-md animate-popIn">
+                <h3 className="text-xl font-bold mb-4">إضافة موظف جديد</h3>
+                <form onSubmit={handleAddUser} className="space-y-4">
+                  <input type="text" placeholder="اسم الموظف" value={name} onChange={e=>setName(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
+                  <input type="email" placeholder="البريد الإلكتروني" value={email} onChange={e=>setEmail(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
+                  <input type="password" placeholder="كلمة المرور" value={password} onChange={e=>setPassword(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
+                  <div className="flex gap-3">
+                    <button type="submit" className="flex-1 btn-primary py-3 rounded-lg font-medium text-white">إنشاء الحساب</button>
+                    <button type="button" onClick={()=>setIsModalOpen(false)} className="flex-1 bg-slate-700 hover:bg-slate-600 py-3 rounded-lg font-medium">إلغاء</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function Profile() {
+      const { currentUser } = useApp();
+      const [name, setName] = useState(currentUser?.name || '');
+      const [loading, setLoading] = useState(false);
+
+      const handleUpdate = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        await db.collection('users').doc(currentUser.uid).update({ name });
+        currentUser.name = name; 
+        setLoading(false);
+        alert("تم تحديث الاسم بنجاح.");
+      };
+
+      return (
+        <div className="animate-fadeIn">
+          <h2 className="text-2xl font-bold mb-6">⚙️ إعدادات الحساب</h2>
+          <div className="glass-card p-6 rounded-2xl max-w-lg">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-20 h-20 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 flex items-center justify-center text-3xl font-bold shadow-lg">{name?.charAt(0).toUpperCase()}</div>
+              <div>
+                <p className="text-slate-400 text-sm">البريد الإلكتروني</p>
+                <p className="text-lg font-medium">{currentUser?.email}</p>
+              </div>
+            </div>
+            <form onSubmit={handleUpdate} className="space-y-4">
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">الاسم المعروض (يظهر في الشات وغرف الصوت)</label>
+                <input type="text" value={name} onChange={e=>setName(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
+              </div>
+              <button type="submit" disabled={loading} className="btn-primary px-6 py-3 rounded-lg font-medium text-white disabled:opacity-50">
+                {loading ? 'جاري الحفظ...' : 'حفظ التغييرات'}
+              </button>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 7. MAIN APP COMPONENT
+    // ==========================================
+    function App() {
+      const { route, currentUser } = useApp();
+
+      let pageContent = null;
+      if (!currentUser) {
+        pageContent = <Login />;
+      } else {
+        switch(route.page) {
+          case 'chat': pageContent = <GeneralChat />; break;
+          case 'workshops': pageContent = <Workshops />; break;
+          case 'workshop-details': pageContent = <WorkshopDetails />; break;
+          case 'archive': pageContent = <Archive />; break;
+          case 'equipment': pageContent = <Equipment />; break;
+          case 'logs': pageContent = <ActivityLog />; break;
+          case 'users': pageContent = <Users />; break;
+          case 'profile': pageContent = <Profile />; break;
+          default: pageContent = <Dashboard />;
+        }
+      }
+
+      return (
+        <>
+          {currentUser ? <Layout>{pageContent}</Layout> : pageContent}
+        </>
+      );
+    }
+
+    // ==========================================
+    // 8. RENDER APP
+    // ==========================================
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(
+      <AppProvider>
+        <App />
+      </AppProvider>
+    );
+  </script>
+</body>
+</html>
