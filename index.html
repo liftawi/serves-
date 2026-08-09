@@ -160,7 +160,7 @@
         return unsub;
       }, []);
 
-      // نظام مهلة النشاط (Inactivity Timeout) - دقيقتان
+      // نظام مهلة النشاط (Inactivity Timeout) - دقيقة واحدة
       useEffect(() => {
         if (!currentUser) return;
         let inactivityTimer;
@@ -168,16 +168,18 @@
         const resetTimer = async () => {
           clearTimeout(inactivityTimer);
           await db.collection('users').doc(currentUser.uid).update({ status: 'online' });
+          rtdb.ref(`status/${currentUser.uid}`).set('online');
           
           inactivityTimer = setTimeout(async () => {
             await db.collection('users').doc(currentUser.uid).update({ status: 'offline' });
             rtdb.ref(`status/${currentUser.uid}`).set('offline');
-          }, 2 * 60 * 1000); 
+          }, 1 * 60 * 1000); 
         };
 
         window.addEventListener('mousemove', resetTimer);
         window.addEventListener('keydown', resetTimer);
-        window.addEventListener('touchstart', resetTimer);
+        window.addEventListener('touchstart', resetTimer); 
+        window.addEventListener('click', resetTimer);
         resetTimer(); 
 
         return () => {
@@ -185,8 +187,27 @@
           window.removeEventListener('mousemove', resetTimer);
           window.removeEventListener('keydown', resetTimer);
           window.removeEventListener('touchstart', resetTimer);
+          window.removeEventListener('click', resetTimer);
         };
       }, [currentUser]);
+
+      // النظام اللامركزي لمزامنة حالة الاتصال من RTDB إلى Firestore
+      useEffect(() => {
+        const statusRef = rtdb.ref('status/');
+        const syncStatuses = (snap) => {
+          const statuses = snap.val() || {};
+          Object.keys(statuses).forEach(uid => {
+            const rtdbStatus = statuses[uid];
+            if (rtdbStatus === 'offline') {
+              db.collection('users').doc(uid).update({ status: 'offline' }).catch(() => {});
+            } else if (rtdbStatus === 'online') {
+              db.collection('users').doc(uid).update({ status: 'online' }).catch(() => {});
+            }
+          });
+        };
+        statusRef.on('value', syncStatuses);
+        return () => statusRef.off('value', syncStatuses);
+      }, []);
 
       // مستمعو الإشعارات
       useEffect(() => {
