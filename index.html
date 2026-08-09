@@ -104,7 +104,6 @@
 
       useEffect(() => { navigateRef.current = navigate; }, []);
 
-      // دالة إرسال إشعارات سطح المكتب
       const showDesktopNotification = (title, body, page) => {
         if (!("Notification" in window)) return;
         if (Notification.permission === "granted") {
@@ -123,7 +122,6 @@
       useEffect(() => {
         const unsub = auth.onAuthStateChanged(async user => {
           if (user) {
-            // طلب إذن الإشعارات عند تسجيل الدخول
             if ("Notification" in window && Notification.permission === 'default') {
               Notification.requestPermission();
             }
@@ -152,9 +150,6 @@
                 });
               }
             });
-            myStatusRef.on('value', (snap) => {
-              if (snap.val() === 'offline') userRef.update({ status: 'offline' });
-            });
 
             const userData = userDoc.exists ? userDoc.data() : { name: user.email };
             const isAdmin = user.email === 'a@gmail.com';
@@ -165,12 +160,39 @@
         return unsub;
       }, []);
 
-      // مستمعو الإشعارات (Real-time Listeners + Desktop Notifications)
+      // نظام مهلة النشاط (Inactivity Timeout) - دقيقتان
+      useEffect(() => {
+        if (!currentUser) return;
+        let inactivityTimer;
+        
+        const resetTimer = async () => {
+          clearTimeout(inactivityTimer);
+          await db.collection('users').doc(currentUser.uid).update({ status: 'online' });
+          
+          inactivityTimer = setTimeout(async () => {
+            await db.collection('users').doc(currentUser.uid).update({ status: 'offline' });
+            rtdb.ref(`status/${currentUser.uid}`).set('offline');
+          }, 2 * 60 * 1000); 
+        };
+
+        window.addEventListener('mousemove', resetTimer);
+        window.addEventListener('keydown', resetTimer);
+        window.addEventListener('touchstart', resetTimer);
+        resetTimer(); 
+
+        return () => {
+          clearTimeout(inactivityTimer);
+          window.removeEventListener('mousemove', resetTimer);
+          window.removeEventListener('keydown', resetTimer);
+          window.removeEventListener('touchstart', resetTimer);
+        };
+      }, [currentUser]);
+
+      // مستمعو الإشعارات
       useEffect(() => {
         if (!currentUser) return;
         const unsubs = [];
 
-        // Chat Listener
         let initialChat = true;
         unsubs.push(db.collection('general_chat').orderBy('timestamp', 'asc').onSnapshot(snap => {
           if (initialChat) { initialChat = false; return; }
@@ -183,19 +205,23 @@
           });
         }));
 
-        // Workshops Listener
         let initialWs = true;
         unsubs.push(db.collection('workshops').where('status','==','active').onSnapshot(snap => {
           if (initialWs) { initialWs = false; return; }
           snap.docChanges().forEach(c => {
-            if (c.type === 'added' && activePageRef.current !== 'workshops') {
+            const data = c.doc.data();
+            if (c.type === 'added' && activePageRef.current !== 'workshops' && activePageRef.current !== 'workshop-details') {
               setNotifications(p => ({...p, workshops: true}));
-              showDesktopNotification('ورشة عمل جديدة', `تم إنشاء ورشة: ${c.doc.data().name}`, 'workshops');
+              showDesktopNotification('ورشة عمل جديدة', `تم إنشاء ورشة: ${data.name}`, 'workshops');
+            } else if (c.type === 'modified' && data.lastMessage) {
+              if (data.lastMessage.senderId !== currentUser.uid && activePageRef.current !== 'workshops' && activePageRef.current !== 'workshop-details') {
+                setNotifications(p => ({...p, workshops: true}));
+                showDesktopNotification(`رسالة في ورشة ${data.name}`, data.lastMessage.text, 'workshops');
+              }
             }
           });
         }));
 
-        // Equipment Listener
         let initialEq = true;
         unsubs.push(db.collection('equipment').onSnapshot(snap => {
           if (initialEq) { initialEq = false; return; }
@@ -207,7 +233,6 @@
           });
         }));
 
-        // Notes Listener
         let initialNotes = true;
         unsubs.push(db.collection('notes').onSnapshot(snap => {
           if (initialNotes) { initialNotes = false; return; }
@@ -219,7 +244,6 @@
           });
         }));
 
-        // Inventory Listener (Admin only)
         if (currentUser.isAdmin) {
           let initialInv = true;
           unsubs.push(db.collection('inventory').onSnapshot(snap => {
@@ -309,11 +333,14 @@
     }
 
     function Topbar({ setIsSidebarOpen }) {
-      const { logout } = useApp();
+      const { logout, notifications } = useApp();
+      const hasNotif = Object.values(notifications).some(n => n === true);
+
       return (
         <header className="h-16 bg-slate-800/80 backdrop-blur-md border-b border-slate-700 flex items-center justify-between px-4 md:px-6 shrink-0 z-20">
-          <button onClick={() => setIsSidebarOpen(true)} className="md:hidden text-slate-300 hover:text-white p-2">
+          <button onClick={() => setIsSidebarOpen(true)} className="relative md:hidden text-slate-300 hover:text-white p-2">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+            {hasNotif && <span className="absolute top-1 right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse border-2 border-slate-800"></span>}
           </button>
           <div className="text-slate-300 text-sm md:text-base font-medium">نظام إدارة الورشات الداخلي</div>
           <button onClick={logout} className="bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white px-4 py-2 rounded-lg text-sm transition-all duration-300">خروج</button>
@@ -398,7 +425,7 @@
 
       const handleCreate = async (e) => {
         e.preventDefault();
-        const docRef = await db.collection('workshops').add({ name, location, status: 'active', createdBy: currentUser.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp(), participants: [], equipment: [] });
+        const docRef = await db.collection('workshops').add({ name, location, status: 'active', createdBy: currentUser.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp(), participants: [], equipment: [], lastMessage: null });
         await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'workshop', action: 'create', entityId: docRef.id, entityName: name, newValue: 'active' });
         setName(''); setLocation(''); setIsModalOpen(false);
       };
@@ -461,6 +488,9 @@
       const sendMessage = async (e) => {
         e.preventDefault(); if (!newMsg.trim()) return;
         await db.collection(`workshops/${id}/messages`).add({ text: newMsg, senderId: currentUser.uid, senderName: currentUser.name, timestamp: firebase.firestore.FieldValue.serverTimestamp() });
+        await db.collection('workshops').doc(id).update({
+          lastMessage: { text: newMsg, senderId: currentUser.uid, timestamp: firebase.firestore.FieldValue.serverTimestamp() }
+        });
         setNewMsg('');
       };
 
@@ -897,10 +927,16 @@
       };
 
       const handleDisableUser = async (userId, userName) => {
-        if (userId === currentUser.uid) { alert("لا يمكنك حذف حسابك أثناء استخدامه."); return; }
-        if (!window.confirm(`هل أنت متأكد من حذف/تعطيل الموظف "${userName}"؟`)) return;
+        if (userId === currentUser.uid) { alert("لا يمكنك تعطيل حسابك أثناء استخدامه."); return; }
+        if (!window.confirm(`هل أنت متأكد من تعطيل الموظف "${userName}"؟`)) return;
         await db.collection('users').doc(userId).update({ disabled: true, status: 'offline' });
-        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'user', action: 'delete', entityId: userId, entityName: userName });
+        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'user', action: 'disable', entityId: userId, entityName: userName });
+      };
+
+      const handleEnableUser = async (userId, userName) => {
+        if (!window.confirm(`هل أنت متأكد من تفعيل حساب الموظف "${userName}"؟`)) return;
+        await db.collection('users').doc(userId).update({ disabled: false });
+        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'user', action: 'enable', entityId: userId, entityName: userName });
       };
 
       return (
@@ -924,7 +960,11 @@
                   </div>
                 </div>
                 {currentUser?.isAdmin && (
-                  <button onClick={() => handleDisableUser(user.id, user.name)} className="text-red-400 hover:text-red-300 text-sm font-medium transition-colors shrink-0">حذف</button>
+                  user.disabled ? (
+                    <button onClick={() => handleEnableUser(user.id, user.name)} className="text-green-400 hover:text-green-300 text-sm font-bold transition-colors shrink-0">تفعيل</button>
+                  ) : (
+                    <button onClick={() => handleDisableUser(user.id, user.name)} className="text-red-400 hover:text-red-300 text-sm font-medium transition-colors shrink-0">تعطيل</button>
+                  )
                 )}
               </div>
             ))}
