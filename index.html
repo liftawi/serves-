@@ -122,6 +122,15 @@
       useEffect(() => {
         const unsub = auth.onAuthStateChanged(async user => {
           if (user) {
+            try {
+              await user.getIdToken(true); 
+            } catch (e) {
+              await auth.signOut();
+              setCurrentUser(null);
+              setLoading(false);
+              return;
+            }
+
             if ("Notification" in window && Notification.permission === 'default') {
               Notification.requestPermission();
             }
@@ -136,7 +145,7 @@
             }
 
             if (!userDoc.exists) { 
-              await userRef.set({ email: user.email, name: user.email, status: 'online' }); 
+              await userRef.set({ email: user.email, name: user.email, status: 'online', disabled: false }); 
             } else { 
               await userRef.update({ status: 'online', disabled: false }); 
             }
@@ -508,7 +517,13 @@
 
       const sendMessage = async (e) => {
         e.preventDefault(); if (!newMsg.trim()) return;
-        await db.collection(`workshops/${id}/messages`).add({ text: newMsg, senderId: currentUser.uid, senderName: currentUser.name, timestamp: firebase.firestore.FieldValue.serverTimestamp() });
+        await db.collection(`workshops/${id}/messages`).add({ 
+          text: newMsg, 
+          senderId: currentUser.uid, 
+          senderName: currentUser.name, 
+          isAdmin: currentUser.isAdmin || false, 
+          timestamp: firebase.firestore.FieldValue.serverTimestamp() 
+        });
         await db.collection('workshops').doc(id).update({
           lastMessage: { text: newMsg, senderId: currentUser.uid, timestamp: firebase.firestore.FieldValue.serverTimestamp() }
         });
@@ -571,7 +586,7 @@
               {workshop.status === 'active' && (
                 <select onChange={(e) => { const u = allUsers.find(u => u.id === e.target.value); if(u) addParticipant(u.id, u.name); }} value="" className="bg-slate-700 text-slate-300 px-3 py-1 rounded-full text-xs outline-none">
                   <option value="">+ إضافة موظف</option>
-                  {allUsers.filter(u => !workshop.participants?.some(p => p.id === u.id)).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                  {allUsers.filter(u => !u.disabled && !workshop.participants?.some(p => p.id === u.id)).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </select>
               )}
             </div>
@@ -599,8 +614,16 @@
             <div className="flex-1 p-4 overflow-y-auto space-y-3 custom-scrollbar">
               {messages.map(msg => (
                 <div key={msg.id} className={`flex flex-col ${msg.senderId === currentUser.uid ? 'items-end' : 'items-start'} animate-fadeIn`}>
-                  <span className="text-xs text-slate-500 mb-1">{msg.senderName}</span>
-                  <div className={`max-w-[70%] p-3 rounded-lg ${msg.senderId === currentUser.uid ? 'bg-gradient-to-l from-blue-600 to-indigo-600 text-white' : 'bg-slate-700 text-slate-100'}`}><p className="text-sm break-words">{msg.text}</p></div>
+                  <span className="text-xs text-slate-500 mb-1 flex items-center gap-1">
+                    {msg.senderName} 
+                    {msg.isAdmin && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded">مسؤول</span>}
+                  </span>
+                  <div className={`max-w-[70%] p-3 rounded-lg ${
+                    msg.isAdmin ? 'bg-gradient-to-l from-red-600 to-rose-600 text-white' : 
+                    (msg.senderId === currentUser.uid ? 'bg-gradient-to-l from-blue-600 to-indigo-600 text-white' : 'bg-slate-700 text-slate-100')
+                  }`}>
+                    <p className="text-sm break-words">{msg.text}</p>
+                  </div>
                 </div>
               ))}
               <div ref={messagesEndRef} />
@@ -630,7 +653,13 @@
 
       const sendMessage = async (e) => {
         e.preventDefault(); if (!newMsg.trim()) return;
-        await db.collection('general_chat').add({ text: newMsg, senderId: currentUser.uid, senderName: currentUser.name, timestamp: firebase.firestore.FieldValue.serverTimestamp() });
+        await db.collection('general_chat').add({ 
+          text: newMsg, 
+          senderId: currentUser.uid, 
+          senderName: currentUser.name, 
+          isAdmin: currentUser.isAdmin || false, 
+          timestamp: firebase.firestore.FieldValue.serverTimestamp() 
+        });
         setNewMsg('');
       };
 
@@ -649,8 +678,14 @@
             <div className="flex-1 p-4 overflow-y-auto space-y-3 custom-scrollbar">
               {messages.map(msg => (
                 <div key={msg.id} className={`flex flex-col ${msg.senderId === currentUser.uid ? 'items-end' : 'items-start'} animate-fadeIn`}>
-                  <span className="text-xs text-slate-500 mb-1">{msg.senderName}</span>
-                  <div className={`max-w-[70%] p-3 rounded-lg ${msg.senderId === currentUser.uid ? 'bg-gradient-to-l from-blue-600 to-indigo-600 text-white' : 'bg-slate-700 text-slate-100'}`}>
+                  <span className="text-xs text-slate-500 mb-1 flex items-center gap-1">
+                    {msg.senderName} 
+                    {msg.isAdmin && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded">مسؤول</span>}
+                  </span>
+                  <div className={`max-w-[70%] p-3 rounded-lg ${
+                    msg.isAdmin ? 'bg-gradient-to-l from-red-600 to-rose-600 text-white' : 
+                    (msg.senderId === currentUser.uid ? 'bg-gradient-to-l from-blue-600 to-indigo-600 text-white' : 'bg-slate-700 text-slate-100')
+                  }`}>
                     <p className="text-sm break-words">{msg.text}</p>
                   </div>
                   {currentUser?.isAdmin && (
@@ -960,35 +995,57 @@
         await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'user', action: 'enable', entityId: userId, entityName: userName });
       };
 
+      const activeUsers = users.filter(u => !u.disabled);
+      const disabledUsers = users.filter(u => u.disabled);
+
+      const renderUserCard = (user) => (
+        <div key={user.id} className={`glass-card p-4 rounded-xl flex items-center justify-between gap-4 card-hover ${user.disabled ? 'opacity-70' : ''}`}>
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 flex items-center justify-center text-xl font-bold">{user.name?.charAt(0).toUpperCase()}</div>
+              <span className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-slate-800 ${user.status === 'online' && !user.disabled ? 'bg-green-500' : 'bg-slate-500'}`}></span>
+            </div>
+            <div>
+              <h3 className="font-bold text-lg">{user.name}</h3>
+              <p className="text-xs text-slate-500">{user.email}</p>
+              <p className={`text-xs ${user.disabled ? 'text-red-400' : (user.status === 'online' ? 'text-green-400' : 'text-slate-500')}`}>
+                {user.disabled ? '⛔ معطل' : (user.status === 'online' ? '🟢 متصل' : '⚫ غير متصل')}
+              </p>
+            </div>
+          </div>
+          {currentUser?.isAdmin && (
+            user.disabled ? (
+              <button onClick={() => handleEnableUser(user.id, user.name)} className="text-green-400 hover:text-green-300 text-sm font-bold transition-colors shrink-0">تفعيل</button>
+            ) : (
+              <button onClick={() => handleDisableUser(user.id, user.name)} className="text-red-400 hover:text-red-300 text-sm font-medium transition-colors shrink-0">تعطيل</button>
+            )
+          )}
+        </div>
+      );
+
       return (
         <div className="animate-fadeIn">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold">الموظفون</h2>
             {currentUser?.isAdmin && <button onClick={() => setIsModalOpen(true)} className="btn-primary px-4 py-2 rounded-lg font-medium text-white">+ إضافة موظف</button>}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {users.map(user => (
-              <div key={user.id} className="glass-card p-4 rounded-xl flex items-center justify-between gap-4 card-hover">
-                <div className="flex items-center gap-4">
-                  <div className="relative">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 flex items-center justify-center text-xl font-bold">{user.name?.charAt(0).toUpperCase()}</div>
-                    <span className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-slate-800 ${user.status === 'online' ? 'bg-green-500' : 'bg-slate-500'}`}></span>
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-lg">{user.name}</h3>
-                    <p className="text-xs text-slate-500">{user.email}</p>
-                    <p className={`text-xs ${user.status === 'online' ? 'text-green-400' : 'text-slate-500'}`}>{user.status === 'online' ? '🟢 متصل' : '⚫ غير متصل'}</p>
-                  </div>
-                </div>
-                {currentUser?.isAdmin && (
-                  user.disabled ? (
-                    <button onClick={() => handleEnableUser(user.id, user.name)} className="text-green-400 hover:text-green-300 text-sm font-bold transition-colors shrink-0">تفعيل</button>
-                  ) : (
-                    <button onClick={() => handleDisableUser(user.id, user.name)} className="text-red-400 hover:text-red-300 text-sm font-medium transition-colors shrink-0">تعطيل</button>
-                  )
-                )}
+
+          <div className="mb-10">
+            <h3 className="text-lg font-bold mb-4 text-slate-200 border-b border-slate-700 pb-2">الموظفون النشطون ({activeUsers.length})</h3>
+            {activeUsers.length === 0 ? <p className="text-slate-500 text-center py-6">لا يوجد موظفون نشطون.</p> : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {activeUsers.map(renderUserCard)}
               </div>
-            ))}
+            )}
+          </div>
+
+          <div>
+            <h3 className="text-lg font-bold mb-4 text-red-400 border-b border-red-500/30 pb-2">الموظفون المعطلون ({disabledUsers.length})</h3>
+            {disabledUsers.length === 0 ? <p className="text-slate-500 text-center py-6">لا يوجد موظفون معطلون.</p> : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {disabledUsers.map(renderUserCard)}
+              </div>
+            )}
           </div>
 
           {isModalOpen && (
