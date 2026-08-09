@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Company OS - نظام إدارة الورشات</title>
+  
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -13,28 +14,36 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+
   <style>
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; }
+    body { font-family: 'Tajawal', sans-serif; background-color: #09090b; -webkit-font-smoothing: antialiased; }
     .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #52525b; }
     
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes popIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-    .animate-fadeIn { animation: fadeIn 0.4s ease-out forwards; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes popIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+    .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
     .animate-popIn { animation: popIn 0.2s ease-out forwards; }
     
-    .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(71, 85, 105, 0.5); }
-    .btn-primary { background: linear-gradient(135deg, #3b82f6, #6366f1); transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3); }
-    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5); }
-    .card-hover { transition: all 0.3s ease; }
-    .card-hover:hover { transform: translateY(-3px); border-color: #3b82f6; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); }
+    .glass-card { background: #18181b; border: 1px solid #27272a; }
+    .btn-primary { background: #4f46e5; transition: all 0.2s ease; }
+    .btn-primary:hover { background: #4338ca; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); }
+    .card-hover { transition: all 0.2s ease; }
+    .card-hover:hover { border-color: #3f3f46; background: #1f1f23; }
+    
+    input, textarea, select { color-scheme: dark; }
+    input:focus, textarea:focus, select:focus { box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.3); }
   </style>
 </head>
-<body class="bg-slate-900 text-slate-100">
+<body class="bg-zinc-950 text-zinc-100">
   <div id="root">
-    <div style="text-align:center; padding-top:50px; color:#94a3b8; font-family:sans-serif;">
-      <h2 style="font-size:24px; font-weight:bold;">جاري تحميل نظام الشركة...</h2>
+    <div style="text-align:center; padding-top:50px; color:#71717a; font-family:sans-serif;">
+      <h2 style="font-size:24px; font-weight:bold;">جاري تحميل النظام...</h2>
     </div>
   </div>
 
@@ -61,7 +70,37 @@
     const rtdb = firebase.database();
 
     // ==========================================
-    // 2. ACTIVITY LOGGER
+    // 2. ICONS (Soft SVG)
+    // ==========================================
+    function Icon({ name, className }) {
+      const paths = {
+        dashboard: <path d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.5a.75.75 0 00.75.75h4.5a.75.75 0 00.75-.75V15a.75.75 0 01.75-.75h3a.75.75 0 01.75.75v5.25a.75.75 0 00.75.75h4.5a.75.75 0 00.75-.75V9.75M8.25 21h8.25" />,
+        chat: <path d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />,
+        workshops: <path d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" />,
+        archive: <path d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />,
+        equipment: <path d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437" />,
+        inventory: <path d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />,
+        notes: <path d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" />,
+        logs: <path d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />,
+        users: <path d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />,
+        profile: <path d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />,
+        logout: <path d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />,
+        send: <path d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />,
+        menu: <path d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />,
+        plus: <path d="M12 4.5v15m7.5-7.5h-15" />,
+        trash: <path d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />,
+        check: <path d="M4.5 12.75l6 6 9-13.5" />,
+        back: <path d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+      };
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className || "w-5 h-5"}>
+          {paths[name]}
+        </svg>
+      );
+    }
+
+    // ==========================================
+    // 3. ACTIVITY LOGGER
     // ==========================================
     async function logActivity({ userId, userName, type, action, entityId, entityName, oldValue, newValue, workshopId = null }) {
       try {
@@ -70,7 +109,7 @@
     }
 
     // ==========================================
-    // 3. APP CONTEXT & AUTH & PRESENCE & NOTIFS
+    // 4. APP CONTEXT & AUTH & PRESENCE & NOTIFS
     // ==========================================
     const AppContext = createContext();
     function useApp() { return useContext(AppContext); }
@@ -107,56 +146,28 @@
       const showDesktopNotification = (title, body, page) => {
         if (!("Notification" in window)) return;
         if (Notification.permission === "granted") {
-          const notification = new Notification(title, { 
-            body: body, 
-            icon: "https://cdn-icons-png.flaticon.com/512/3596/3596165.png" 
-          });
-          notification.onclick = () => {
-            window.focus();
-            if (navigateRef.current) navigateRef.current(page);
-            notification.close();
-          };
+          const notification = new Notification(title, { body, icon: "https://cdn-icons-png.flaticon.com/512/3596/3596165.png" });
+          notification.onclick = () => { window.focus(); if (navigateRef.current) navigateRef.current(page); notification.close(); };
         }
       };
 
       useEffect(() => {
         const unsub = auth.onAuthStateChanged(async user => {
           if (user) {
-            try {
-              await user.getIdToken(true); 
-            } catch (e) {
-              await auth.signOut();
-              setCurrentUser(null);
-              setLoading(false);
-              return;
-            }
-
-            if ("Notification" in window && Notification.permission === 'default') {
-              Notification.requestPermission();
-            }
+            try { await user.getIdToken(true); } catch (e) { await auth.signOut(); setCurrentUser(null); setLoading(false); return; }
+            if ("Notification" in window && Notification.permission === 'default') Notification.requestPermission();
 
             const userRef = db.collection('users').doc(user.uid);
             const userDoc = await userRef.get();
             
-            if (userDoc.exists && userDoc.data().disabled) {
-              alert("تم تعطيل حسابك من قبل الإدارة.");
-              await auth.signOut();
-              return;
-            }
-
-            if (!userDoc.exists) { 
-              await userRef.set({ email: user.email, name: user.email, status: 'online', disabled: false }); 
-            } else { 
-              await userRef.update({ status: 'online', disabled: false }); 
-            }
+            if (userDoc.exists && userDoc.data().disabled) { alert("تم تعطيل حسابك من قبل الإدارة."); await auth.signOut(); return; }
+            if (!userDoc.exists) { await userRef.set({ email: user.email, name: user.email, status: 'online', disabled: false }); } 
+            else { await userRef.update({ status: 'online', disabled: false }); }
             
             const myStatusRef = rtdb.ref(`status/${user.uid}`);
             rtdb.ref('.info/connected').on('value', (snap) => {
               if (snap.val() === true) {
-                myStatusRef.onDisconnect().set('offline').then(async () => {
-                  myStatusRef.set('online');
-                  await userRef.update({ status: 'online' });
-                });
+                myStatusRef.onDisconnect().set('offline').then(async () => { myStatusRef.set('online'); await userRef.update({ status: 'online' }); });
               }
             });
 
@@ -169,36 +180,19 @@
         return unsub;
       }, []);
 
-      // نظام مهلة النشاط (Inactivity Timeout) - دقيقة واحدة
+      // محاولة إرسال إشعار الخروج فوراً عند إغلاق المتصفح
       useEffect(() => {
-        if (!currentUser) return;
-        let inactivityTimer;
-        
-        const resetTimer = async () => {
-          clearTimeout(inactivityTimer);
-          await db.collection('users').doc(currentUser.uid).update({ status: 'online' });
-          rtdb.ref(`status/${currentUser.uid}`).set('online');
-          
-          inactivityTimer = setTimeout(async () => {
-            await db.collection('users').doc(currentUser.uid).update({ status: 'offline' });
-            rtdb.ref(`status/${currentUser.uid}`).set('offline');
-          }, 1 * 60 * 1000); 
+        const handleBeforeUnload = async (e) => {
+          if (auth.currentUser) {
+            try {
+              await db.collection('users').doc(auth.currentUser.uid).update({ status: 'offline' });
+              await rtdb.ref(`status/${auth.currentUser.uid}`).set('offline');
+            } catch (err) {}
+          }
         };
-
-        window.addEventListener('mousemove', resetTimer);
-        window.addEventListener('keydown', resetTimer);
-        window.addEventListener('touchstart', resetTimer); 
-        window.addEventListener('click', resetTimer);
-        resetTimer(); 
-
-        return () => {
-          clearTimeout(inactivityTimer);
-          window.removeEventListener('mousemove', resetTimer);
-          window.removeEventListener('keydown', resetTimer);
-          window.removeEventListener('touchstart', resetTimer);
-          window.removeEventListener('click', resetTimer);
-        };
-      }, [currentUser]);
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+      }, []);
 
       // النظام اللامركزي لمزامنة حالة الاتصال من RTDB إلى Firestore
       useEffect(() => {
@@ -207,86 +201,45 @@
           const statuses = snap.val() || {};
           Object.keys(statuses).forEach(uid => {
             const rtdbStatus = statuses[uid];
-            if (rtdbStatus === 'offline') {
-              db.collection('users').doc(uid).update({ status: 'offline' }).catch(() => {});
-            } else if (rtdbStatus === 'online') {
-              db.collection('users').doc(uid).update({ status: 'online' }).catch(() => {});
-            }
+            if (rtdbStatus === 'offline') db.collection('users').doc(uid).update({ status: 'offline' }).catch(() => {});
+            else if (rtdbStatus === 'online') db.collection('users').doc(uid).update({ status: 'online' }).catch(() => {});
           });
         };
         statusRef.on('value', syncStatuses);
         return () => statusRef.off('value', syncStatuses);
       }, []);
 
-      // مستمعو الإشعارات
       useEffect(() => {
         if (!currentUser) return;
         const unsubs = [];
-
         let initialChat = true;
         unsubs.push(db.collection('general_chat').orderBy('timestamp', 'asc').onSnapshot(snap => {
           if (initialChat) { initialChat = false; return; }
           snap.docChanges().forEach(c => {
             if (c.type === 'added' && c.doc.data().senderId !== currentUser.uid && activePageRef.current !== 'chat') {
-              setNotifications(p => ({...p, chat: true}));
-              const msgData = c.doc.data();
-              showDesktopNotification(`رسالة جديدة من ${msgData.senderName}`, msgData.text, 'chat');
+              setNotifications(p => ({...p, chat: true})); const msgData = c.doc.data(); showDesktopNotification(`رسالة جديدة من ${msgData.senderName}`, msgData.text, 'chat');
             }
           });
         }));
-
         let initialWs = true;
         unsubs.push(db.collection('workshops').where('status','==','active').onSnapshot(snap => {
           if (initialWs) { initialWs = false; return; }
           snap.docChanges().forEach(c => {
             const data = c.doc.data();
             if (c.type === 'added' && activePageRef.current !== 'workshops' && activePageRef.current !== 'workshop-details') {
-              setNotifications(p => ({...p, workshops: true}));
-              showDesktopNotification('ورشة عمل جديدة', `تم إنشاء ورشة: ${data.name}`, 'workshops');
+              setNotifications(p => ({...p, workshops: true})); showDesktopNotification('ورشة عمل جديدة', `تم إنشاء ورشة: ${data.name}`, 'workshops');
             } else if (c.type === 'modified' && data.lastMessage) {
               if (data.lastMessage.senderId !== currentUser.uid && activePageRef.current !== 'workshops' && activePageRef.current !== 'workshop-details') {
-                setNotifications(p => ({...p, workshops: true}));
-                showDesktopNotification(`رسالة في ورشة ${data.name}`, data.lastMessage.text, 'workshops');
+                setNotifications(p => ({...p, workshops: true})); showDesktopNotification(`رسالة في ورشة ${data.name}`, data.lastMessage.text, 'workshops');
               }
             }
           });
         }));
-
         let initialEq = true;
-        unsubs.push(db.collection('equipment').onSnapshot(snap => {
-          if (initialEq) { initialEq = false; return; }
-          snap.docChanges().forEach(c => {
-            if (c.type === 'added' && activePageRef.current !== 'equipment') {
-              setNotifications(p => ({...p, equipment: true}));
-              showDesktopNotification('معدة جديدة', `تم إضافة: ${c.doc.data().name}`, 'equipment');
-            }
-          });
-        }));
-
+        unsubs.push(db.collection('equipment').onSnapshot(snap => { if (initialEq) { initialEq = false; return; } snap.docChanges().forEach(c => { if (c.type === 'added' && activePageRef.current !== 'equipment') { setNotifications(p => ({...p, equipment: true})); showDesktopNotification('معدة جديدة', `تم إضافة: ${c.doc.data().name}`, 'equipment'); } }); }));
         let initialNotes = true;
-        unsubs.push(db.collection('notes').onSnapshot(snap => {
-          if (initialNotes) { initialNotes = false; return; }
-          snap.docChanges().forEach(c => {
-            if (c.type === 'added' && activePageRef.current !== 'notes') {
-              setNotifications(p => ({...p, notes: true}));
-              showDesktopNotification('ملاحظة جديدة', `تمت إضافة ملاحظة بواسطة: ${c.doc.data().userName}`, 'notes');
-            }
-          });
-        }));
-
-        if (currentUser.isAdmin) {
-          let initialInv = true;
-          unsubs.push(db.collection('inventory').onSnapshot(snap => {
-            if (initialInv) { initialInv = false; return; }
-            snap.docChanges().forEach(c => {
-              if (c.type === 'added' && activePageRef.current !== 'inventory') {
-                setNotifications(p => ({...p, inventory: true}));
-                showDesktopNotification('مادة جديدة في المخزون', `تم إضافة: ${c.doc.data().name}`, 'inventory');
-              }
-            });
-          }));
-        }
-
+        unsubs.push(db.collection('notes').onSnapshot(snap => { if (initialNotes) { initialNotes = false; return; } snap.docChanges().forEach(c => { if (c.type === 'added' && activePageRef.current !== 'notes') { setNotifications(p => ({...p, notes: true})); showDesktopNotification('ملاحظة جديدة', `تمت إضافة ملاحظة بواسطة: ${c.doc.data().userName}`, 'notes'); } }); }));
+        if (currentUser.isAdmin) { let initialInv = true; unsubs.push(db.collection('inventory').onSnapshot(snap => { if (initialInv) { initialInv = false; return; } snap.docChanges().forEach(c => { if (c.type === 'added' && activePageRef.current !== 'inventory') { setNotifications(p => ({...p, inventory: true})); showDesktopNotification('مادة جديدة في المخزون', `تم إضافة: ${c.doc.data().name}`, 'inventory'); } }); })); }
         return () => unsubs.forEach(u => u());
       }, [currentUser]);
 
@@ -298,14 +251,14 @@
     }
 
     // ==========================================
-    // 4. LAYOUT COMPONENTS
+    // 5. LAYOUT COMPONENTS
     // ==========================================
     function Layout({ children }) {
       const [isSidebarOpen, setIsSidebarOpen] = useState(false);
       return (
-        <div className="flex h-screen bg-slate-900 text-slate-100 overflow-hidden">
+        <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
           <Sidebar isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} />
-          {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setIsSidebarOpen(false)}></div>}
+          {isSidebarOpen && <div className="fixed inset-0 bg-black/60 z-30 md:hidden" onClick={() => setIsSidebarOpen(false)}></div>}
           <div className="flex-1 flex flex-col overflow-hidden">
             <Topbar setIsSidebarOpen={setIsSidebarOpen} />
             <main className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar">{children}</main>
@@ -316,45 +269,41 @@
 
     function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
       const { navigate, route, currentUser, notifications } = useApp();
-      
       let navItems = [
-        { name: 'الرئيسية', page: 'dashboard', icon: '🏠' },
-        { name: 'الشات العام', page: 'chat', icon: '💬', notify: notifications.chat },
-        { name: 'الورشات الحالية', page: 'workshops', icon: '🛠️', notify: notifications.workshops },
-        { name: 'أرشيف الورشات', page: 'archive', icon: '📚' },
-        { name: 'المعدات', page: 'equipment', icon: '🔧', notify: notifications.equipment },
-        { name: 'الملاحظات', page: 'notes', icon: '📝', notify: notifications.notes },
-        { name: 'سجل النشاط', page: 'logs', icon: '📜' },
-        { name: 'الموظفون', page: 'users', icon: '👥' },
+        { name: 'الرئيسية', page: 'dashboard', icon: 'dashboard' },
+        { name: 'الشات العام', page: 'chat', icon: 'chat', notify: notifications.chat },
+        { name: 'الورشات الحالية', page: 'workshops', icon: 'workshops', notify: notifications.workshops },
+        { name: 'أرشيف الورشات', page: 'archive', icon: 'archive' },
+        { name: 'المعدات', page: 'equipment', icon: 'equipment', notify: notifications.equipment },
+        { name: 'الملاحظات', page: 'notes', icon: 'notes', notify: notifications.notes },
+        { name: 'سجل النشاط', page: 'logs', icon: 'logs' },
+        { name: 'الموظفون', page: 'users', icon: 'users' },
       ];
-      
-      if (currentUser?.isAdmin) {
-        navItems.splice(6, 0, { name: 'حساب المواد', page: 'inventory', icon: '📦', notify: notifications.inventory });
-      }
-      navItems.push({ name: 'حسابي', page: 'profile', icon: '⚙️' });
+      if (currentUser?.isAdmin) navItems.splice(6, 0, { name: 'حساب المواد', page: 'inventory', icon: 'inventory', notify: notifications.inventory });
+      navItems.push({ name: 'حسابي', page: 'profile', icon: 'profile' });
       
       const handleNavigate = (page) => { navigate(page); setIsSidebarOpen(false); };
 
       return (
-        <aside className={`fixed top-0 right-0 h-full w-64 bg-slate-800/95 backdrop-blur-md border-l border-slate-700 flex-col z-40 transform transition-transform duration-300 md:relative md:translate-x-0 md:flex shrink-0 ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-          <div className="h-16 flex items-center justify-center border-b border-slate-700">
-            <h1 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Company OS</h1>
+        <aside className={`fixed top-0 right-0 h-full w-64 bg-zinc-900 border-l border-zinc-800 flex-col z-40 transform transition-transform duration-300 md:relative md:translate-x-0 md:flex shrink-0 ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+          <div className="h-16 flex items-center justify-center border-b border-zinc-800">
+            <h1 className="text-xl font-extrabold text-indigo-400">Company OS</h1>
           </div>
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
+          <nav className="flex-1 p-3 space-y-1 overflow-y-auto custom-scrollbar">
             {navItems.map(item => (
-              <button key={item.page} onClick={() => handleNavigate(item.page)} className={`relative w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 text-right ${route.page === item.page ? 'bg-gradient-to-l from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-700/50 hover:text-white'}`}>
-                <span className="text-lg">{item.icon}</span>
-                <span className="font-medium">{item.name}</span>
-                {item.notify && <span className="absolute top-2 left-2 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>}
+              <button key={item.page} onClick={() => handleNavigate(item.page)} className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium ${route.page === item.page ? 'bg-indigo-500/10 text-indigo-400' : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'}`}>
+                <Icon name={item.icon} className="w-5 h-5" />
+                <span>{item.name}</span>
+                {item.notify && <span className="absolute top-2 left-2 w-2 h-2 bg-rose-500 rounded-full animate-pulse"></span>}
               </button>
             ))}
           </nav>
-          <div className="p-4 border-t border-slate-700">
-            <div className="flex items-center gap-3 bg-slate-900/50 p-3 rounded-lg">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 flex items-center justify-center text-sm font-bold">{currentUser?.name?.charAt(0).toUpperCase()}</div>
+          <div className="p-4 border-t border-zinc-800">
+            <div className="flex items-center gap-3 bg-zinc-950 p-3 rounded-lg">
+              <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-sm font-bold text-white">{currentUser?.name?.charAt(0).toUpperCase()}</div>
               <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-bold truncate">{currentUser?.name} {currentUser?.isAdmin && <span className="text-xs text-yellow-400">(مسؤول)</span>}</p>
-                <p className="text-xs text-green-400 flex items-center gap-1"><span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span> متصل الآن</p>
+                <p className="text-sm font-bold truncate text-zinc-200">{currentUser?.name} {currentUser?.isAdmin && <span className="text-xs text-amber-400">(مسؤول)</span>}</p>
+                <p className="text-xs text-emerald-500 flex items-center gap-1"><span className="w-2 h-2 bg-emerald-500 rounded-full"></span> متصل الآن</p>
               </div>
             </div>
           </div>
@@ -365,46 +314,41 @@
     function Topbar({ setIsSidebarOpen }) {
       const { logout, notifications } = useApp();
       const hasNotif = Object.values(notifications).some(n => n === true);
-
       return (
-        <header className="h-16 bg-slate-800/80 backdrop-blur-md border-b border-slate-700 flex items-center justify-between px-4 md:px-6 shrink-0 z-20">
-          <button onClick={() => setIsSidebarOpen(true)} className="relative md:hidden text-slate-300 hover:text-white p-2">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-            {hasNotif && <span className="absolute top-1 right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse border-2 border-slate-800"></span>}
+        <header className="h-16 bg-zinc-950 border-b border-zinc-800 flex items-center justify-between px-4 md:px-6 shrink-0 z-20">
+          <button onClick={() => setIsSidebarOpen(true)} className="relative md:hidden text-zinc-400 hover:text-zinc-100 p-2 hover:bg-zinc-800 rounded-lg transition-colors">
+            <Icon name="menu" className="w-6 h-6" />
+            {hasNotif && <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full animate-pulse border-2 border-zinc-950"></span>}
           </button>
-          <div className="text-slate-300 text-sm md:text-base font-medium">نظام إدارة الورشات الداخلي</div>
-          <button onClick={logout} className="bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white px-4 py-2 rounded-lg text-sm transition-all duration-300">خروج</button>
+          <div className="text-zinc-400 text-sm md:text-base font-medium">نظام إدارة الورشات الداخلي</div>
+          <button onClick={logout} className="flex items-center gap-2 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white px-3 py-2 rounded-lg text-sm transition-all duration-300">
+            <Icon name="logout" className="w-4 h-4" /><span className="hidden md:inline">خروج</span>
+          </button>
         </header>
       );
     }
 
     // ==========================================
-    // 5. PAGES
+    // 6. PAGES
     // ==========================================
     function Login() {
       const [email, setEmail] = useState(''); const [password, setPassword] = useState('');
       const [error, setError] = useState(''); const [loading, setLoading] = useState(false);
       const { login } = useApp();
-
-      async function handleSubmit(e) {
-        e.preventDefault(); setError(''); setLoading(true);
-        try { await login(email, password); } catch (err) { setError('بيانات الدخول غير صحيحة.'); }
-        setLoading(false);
-      }
-
+      async function handleSubmit(e) { e.preventDefault(); setError(''); setLoading(true); try { await login(email, password); } catch (err) { setError('بيانات الدخول غير صحيحة.'); } setLoading(false); }
       return (
-        <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center px-4 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-96 h-96 bg-blue-600/20 rounded-full filter blur-[100px] animate-pulse"></div>
-          <div className="absolute bottom-0 right-0 w-96 h-96 bg-indigo-600/20 rounded-full filter blur-[100px] animate-pulse"></div>
-          <div className="max-w-md w-full glass-card p-8 rounded-2xl shadow-2xl z-10 animate-popIn">
+        <div className="min-h-screen bg-zinc-950 flex flex-col justify-center items-center px-4 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-96 h-96 bg-indigo-600/10 rounded-full filter blur-[120px] animate-pulse"></div>
+          <div className="absolute bottom-0 right-0 w-96 h-96 bg-violet-600/10 rounded-full filter blur-[120px] animate-pulse"></div>
+          <div className="max-w-md w-full glass-card p-8 rounded-2xl shadow-xl z-10 animate-popIn">
             <div className="text-center mb-8">
-              <h2 className="mt-4 text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Company Name</h2>
-              <p className="mt-2 text-sm text-slate-400">المنصة الداخلية لإدارة الورشات</p>
+              <h2 className="mt-4 text-3xl font-extrabold text-indigo-400">Company Name</h2>
+              <p className="mt-2 text-sm text-zinc-500">المنصة الداخلية لإدارة الورشات</p>
             </div>
-            {error && <div className="mb-4 bg-red-500/10 text-red-400 text-sm p-3 rounded-lg text-center">{error}</div>}
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="البريد الإلكتروني" className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 text-white outline-none focus:border-blue-500 transition-all" />
-              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="كلمة المرور" className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 text-white outline-none focus:border-blue-500 transition-all" />
+            {error && <div className="mb-4 bg-rose-500/10 text-rose-400 text-sm p-3 rounded-lg text-center">{error}</div>}
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div><label className="block text-sm text-zinc-400 mb-1.5">البريد الإلكتروني</label><input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 outline-none focus:border-indigo-500 transition-colors" /></div>
+              <div><label className="block text-sm text-zinc-400 mb-1.5">كلمة المرور</label><input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 outline-none focus:border-indigo-500 transition-colors" /></div>
               <button type="submit" disabled={loading} className="w-full btn-primary py-3 rounded-lg font-bold text-white disabled:opacity-50">{loading ? 'جاري التحميل...' : 'تسجيل الدخول'}</button>
             </form>
           </div>
@@ -420,21 +364,19 @@
         const unsubU = db.collection('users').where('status', '==', 'online').onSnapshot(snap => setStats(p => ({...p, users: snap.size})));
         return () => { unsubW(); unsubE(); unsubU(); };
       }, []);
-
       const cards = [
-        { title: 'الورشات النشطة', value: stats.activeWorkshops, color: 'from-green-500 to-emerald-500', icon: '🛠️' },
-        { title: 'المعدات المتوفرة', value: stats.availableEquipment, color: 'from-blue-500 to-cyan-500', icon: '🔧' },
-        { title: 'الموظفون المتصلون', value: stats.users, color: 'from-purple-500 to-indigo-500', icon: '🟢' },
+        { title: 'الورشات النشطة', value: stats.activeWorkshops, color: 'text-emerald-400', icon: 'workshops' },
+        { title: 'المعدات المتوفرة', value: stats.availableEquipment, color: 'text-indigo-400', icon: 'equipment' },
+        { title: 'الموظفون المتصلون', value: stats.users, color: 'text-violet-400', icon: 'users' },
       ];
-
       return (
         <div className="space-y-6 animate-fadeIn">
-          <h2 className="text-2xl font-bold">نظرة عامة على النظام</h2>
+          <h2 className="text-2xl font-bold text-zinc-100">نظرة عامة على النظام</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {cards.map((card, i) => (
               <div key={i} className="glass-card p-6 rounded-2xl flex items-center justify-between card-hover">
-                <div><p className="text-slate-400 text-sm mb-1">{card.title}</p><h3 className="text-3xl font-bold">{card.value}</h3></div>
-                <div className={`p-4 rounded-xl bg-gradient-to-br ${card.color} text-2xl shadow-lg`}>{card.icon}</div>
+                <div><p className="text-zinc-500 text-sm mb-1">{card.title}</p><h3 className="text-3xl font-bold text-zinc-100">{card.value}</h3></div>
+                <div className={`p-4 rounded-xl bg-zinc-900 ${card.color}`}><Icon name={card.icon} className="w-7 h-7" /></div>
               </div>
             ))}
           </div>
@@ -444,52 +386,36 @@
 
     function Workshops() {
       const { currentUser, navigate } = useApp();
-      const [workshops, setWorkshops] = useState([]);
-      const [isModalOpen, setIsModalOpen] = useState(false);
+      const [workshops, setWorkshops] = useState([]); const [isModalOpen, setIsModalOpen] = useState(false);
       const [name, setName] = useState(''); const [location, setLocation] = useState('');
-
-      useEffect(() => {
-        const unsub = db.collection('workshops').where('status', '==', 'active').onSnapshot(snap => setWorkshops(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-        return () => unsub();
-      }, []);
-
-      const handleCreate = async (e) => {
-        e.preventDefault();
-        const docRef = await db.collection('workshops').add({ name, location, status: 'active', createdBy: currentUser.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp(), participants: [], equipment: [], lastMessage: null });
-        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'workshop', action: 'create', entityId: docRef.id, entityName: name, newValue: 'active' });
-        setName(''); setLocation(''); setIsModalOpen(false);
-      };
-
+      useEffect(() => { const unsub = db.collection('workshops').where('status', '==', 'active').onSnapshot(snap => setWorkshops(snap.docs.map(d => ({ id: d.id, ...d.data() })))); return () => unsub(); }, []);
+      const handleCreate = async (e) => { e.preventDefault(); const docRef = await db.collection('workshops').add({ name, location, status: 'active', createdBy: currentUser.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp(), participants: [], equipment: [], lastMessage: null }); await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'workshop', action: 'create', entityId: docRef.id, entityName: name, newValue: 'active' }); setName(''); setLocation(''); setIsModalOpen(false); };
       return (
         <div className="animate-fadeIn">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold">الورشات الحالية</h2>
-            {currentUser?.isAdmin && <button onClick={() => setIsModalOpen(true)} className="btn-primary px-4 py-2 rounded-lg font-medium text-white">+ إنشاء ورشة</button>}
+            <h2 className="text-2xl font-bold text-zinc-100">الورشات الحالية</h2>
+            {currentUser?.isAdmin && <button onClick={() => setIsModalOpen(true)} className="btn-primary flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-white"><Icon name="plus" className="w-4 h-4" /> إنشاء ورشة</button>}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {workshops.map(ws => (
-              <button onClick={() => navigate('workshop-details', ws.id)} key={ws.id} className="text-right glass-card p-5 rounded-xl card-hover">
-                <h3 className="text-lg font-bold mb-2 text-blue-400">{ws.name}</h3>
-                <p className="text-slate-400 text-sm">📍 {ws.location}</p>
+              <button onClick={() => navigate('workshop-details', ws.id)} key={ws.id} className="text-right glass-card p-5 rounded-2xl card-hover group">
+                <h3 className="text-lg font-bold mb-2 text-indigo-400 group-hover:text-indigo-300 transition-colors">{ws.name}</h3>
+                <p className="text-zinc-500 text-sm flex items-center gap-2"><Icon name="workshops" className="w-4 h-4" /> {ws.location}</p>
                 <div className="mt-4 flex justify-between items-center text-xs">
-                  <span className="bg-green-500/10 text-green-400 px-2 py-1 rounded">🟢 نشطة</span>
-                  <span className="text-slate-500">{ws.participants?.length || 0} موظفين | {ws.equipment?.length || 0} معدات</span>
+                  <span className="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded-md flex items-center gap-1"><span className="w-2 h-2 bg-emerald-400 rounded-full"></span> نشطة</span>
+                  <span className="text-zinc-600">{ws.participants?.length || 0} موظفين | {ws.equipment?.length || 0} معدات</span>
                 </div>
               </button>
             ))}
           </div>
-
           {isModalOpen && (
-            <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-sm p-4 min-h-screen">
+            <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 min-h-screen">
               <div className="glass-card p-6 rounded-2xl w-full max-w-md animate-popIn">
-                <h3 className="text-xl font-bold mb-4">إنشاء ورشة جديدة</h3>
+                <h3 className="text-xl font-bold mb-4 text-zinc-100">إنشاء ورشة جديدة</h3>
                 <form onSubmit={handleCreate} className="space-y-4">
-                  <input type="text" placeholder="اسم الورشة" value={name} onChange={e=>setName(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
-                  <input type="text" placeholder="الموقع" value={location} onChange={e=>setLocation(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
-                  <div className="flex gap-3">
-                    <button type="submit" className="flex-1 btn-primary py-3 rounded-lg font-medium text-white">إنشاء</button>
-                    <button type="button" onClick={()=>setIsModalOpen(false)} className="flex-1 bg-slate-700 hover:bg-slate-600 py-3 rounded-lg font-medium">إلغاء</button>
-                  </div>
+                  <input type="text" placeholder="اسم الورشة" value={name} onChange={e=>setName(e.target.value)} required className="w-full bg-zinc-900 border border-zinc-800 p-3 rounded-lg outline-none focus:border-indigo-500" />
+                  <input type="text" placeholder="الموقع" value={location} onChange={e=>setLocation(e.target.value)} required className="w-full bg-zinc-900 border border-zinc-800 p-3 rounded-lg outline-none focus:border-indigo-500" />
+                  <div className="flex gap-3 pt-2"><button type="submit" className="flex-1 btn-primary py-3 rounded-lg font-medium text-white">إنشاء</button><button type="button" onClick={()=>setIsModalOpen(false)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 py-3 rounded-lg font-medium">إلغاء</button></div>
                 </form>
               </div>
             </div>
@@ -500,11 +426,9 @@
 
     function WorkshopDetails() {
       const { route: { id }, currentUser, navigate } = useApp();
-      const [workshop, setWorkshop] = useState(null);
-      const [messages, setMessages] = useState([]); const [newMsg, setNewMsg] = useState('');
+      const [workshop, setWorkshop] = useState(null); const [messages, setMessages] = useState([]); const [newMsg, setNewMsg] = useState('');
       const [availableEquipment, setAvailableEquipment] = useState([]); const [allUsers, setAllUsers] = useState([]);
       const messagesEndRef = useRef(null);
-
       useEffect(() => {
         const unsubWs = db.collection('workshops').doc(id).onSnapshot(doc => { if(doc.exists) setWorkshop({ id: doc.id, ...doc.data() }); });
         const unsubMsgs = db.collection(`workshops/${id}/messages`).onSnapshot(snap => setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b)=>a.timestamp - b.timestamp)));
@@ -512,192 +436,81 @@
         const unsubUsers = db.collection('users').onSnapshot(snap => setAllUsers(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
         return () => { unsubWs(); unsubMsgs(); unsubEqAvailable(); unsubUsers(); };
       }, [id]);
-
       useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
-
-      const sendMessage = async (e) => {
-        e.preventDefault(); if (!newMsg.trim()) return;
-        await db.collection(`workshops/${id}/messages`).add({ 
-          text: newMsg, 
-          senderId: currentUser.uid, 
-          senderName: currentUser.name, 
-          isAdmin: currentUser.isAdmin || false, 
-          timestamp: firebase.firestore.FieldValue.serverTimestamp() 
-        });
-        await db.collection('workshops').doc(id).update({
-          lastMessage: { text: newMsg, senderId: currentUser.uid, timestamp: firebase.firestore.FieldValue.serverTimestamp() }
-        });
-        setNewMsg('');
-      };
-
-      const addEquipment = async (eqId, eqName, eqSerial) => {
-        const eqObj = { id: eqId, name: eqName, serial: eqSerial };
-        const updated = [...(workshop.equipment || []), eqObj];
-        await db.collection('workshops').doc(id).update({ equipment: updated });
-        await db.collection('equipment').doc(eqId).update({ status: 'in_use', currentWorkshop: id, currentWorkshopName: workshop.name });
-        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'equipment', action: 'assign', entityId: eqId, entityName: eqName, newValue: workshop.name, workshopId: id });
-      };
-
-      const removeEquipment = async (eqId) => {
-        const updated = workshop.equipment.filter(eq => eq.id !== eqId);
-        await db.collection('workshops').doc(id).update({ equipment: updated });
-        await db.collection('equipment').doc(eqId).update({ status: 'available', currentWorkshop: null, currentWorkshopName: null });
-      };
-
-      const addParticipant = async (userId, userName) => {
-        const updated = [...(workshop.participants || []), { id: userId, name: userName }];
-        await db.collection('workshops').doc(id).update({ participants: updated });
-        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'workshop', action: 'add_participant', entityId: id, entityName: workshop.name, newValue: userName, workshopId: id });
-      };
-
-      const removeParticipant = async (userId) => {
-        const updated = workshop.participants.filter(p => p.id !== userId);
-        await db.collection('workshops').doc(id).update({ participants: updated });
-      };
-
-      const handleEndWorkshop = async () => {
-        if (!window.confirm("هل أنت متأكد من إنهاء هذه الورشة؟")) return;
-        const batch = db.batch();
-        workshop.equipment.forEach(eq => { const ref = db.collection('equipment').doc(eq.id); batch.update(ref, { status: 'available', currentWorkshop: null, currentWorkshopName: null }); });
-        await batch.commit();
-        await db.collection('workshops').doc(id).update({ status: 'archived', endedAt: firebase.firestore.FieldValue.serverTimestamp(), endedBy: currentUser.uid });
-        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'workshop', action: 'end_workshop', entityId: id, entityName: workshop.name, oldValue: 'active', newValue: 'archived', workshopId: id });
-        navigate('workshops');
-      };
-
-      if (!workshop) return <div className="text-center text-slate-400 mt-10 animate-pulse">جاري التحميل...</div>;
-
+      const sendMessage = async (e) => { e.preventDefault(); if (!newMsg.trim()) return; await db.collection(`workshops/${id}/messages`).add({ text: newMsg, senderId: currentUser.uid, senderName: currentUser.name, isAdmin: currentUser.isAdmin || false, timestamp: firebase.firestore.FieldValue.serverTimestamp() }); await db.collection('workshops').doc(id).update({ lastMessage: { text: newMsg, senderId: currentUser.uid, timestamp: firebase.firestore.FieldValue.serverTimestamp() } }); setNewMsg(''); };
+      const addEquipment = async (eqId, eqName, eqSerial) => { const eqObj = { id: eqId, name: eqName, serial: eqSerial }; const updated = [...(workshop.equipment || []), eqObj]; await db.collection('workshops').doc(id).update({ equipment: updated }); await db.collection('equipment').doc(eqId).update({ status: 'in_use', currentWorkshop: id, currentWorkshopName: workshop.name }); await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'equipment', action: 'assign', entityId: eqId, entityName: eqName, newValue: workshop.name, workshopId: id }); };
+      const removeEquipment = async (eqId) => { const updated = workshop.equipment.filter(eq => eq.id !== eqId); await db.collection('workshops').doc(id).update({ equipment: updated }); await db.collection('equipment').doc(eqId).update({ status: 'available', currentWorkshop: null, currentWorkshopName: null }); };
+      const addParticipant = async (userId, userName) => { const updated = [...(workshop.participants || []), { id: userId, name: userName }]; await db.collection('workshops').doc(id).update({ participants: updated }); await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'workshop', action: 'add_participant', entityId: id, entityName: workshop.name, newValue: userName, workshopId: id }); };
+      const removeParticipant = async (userId) => { const updated = workshop.participants.filter(p => p.id !== userId); await db.collection('workshops').doc(id).update({ participants: updated }); };
+      const handleEndWorkshop = async () => { if (!window.confirm("هل أنت متأكد من إنهاء هذه الورشة؟")) return; const batch = db.batch(); workshop.equipment.forEach(eq => { const ref = db.collection('equipment').doc(eq.id); batch.update(ref, { status: 'available', currentWorkshop: null, currentWorkshopName: null }); }); await batch.commit(); await db.collection('workshops').doc(id).update({ status: 'archived', endedAt: firebase.firestore.FieldValue.serverTimestamp(), endedBy: currentUser.uid }); await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'workshop', action: 'end_workshop', entityId: id, entityName: workshop.name, oldValue: 'active', newValue: 'archived', workshopId: id }); navigate('workshops'); };
+      if (!workshop) return <div className="text-center text-zinc-500 mt-10 animate-pulse">جاري التحميل...</div>;
       return (
         <div className="flex flex-col gap-4 h-[calc(100vh-120px)] animate-fadeIn">
-          <div className="glass-card p-4 rounded-xl flex justify-between items-center shrink-0">
-            <div><h2 className="text-xl font-bold">{workshop.name}</h2><p className="text-slate-400 text-sm">📍 {workshop.location} | {workshop.status === 'active' ? '🟢 نشطة' : '✅ منتهية'}</p></div>
-            {workshop.status === 'active' && currentUser?.isAdmin && <button onClick={handleEndWorkshop} className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-sm font-medium transition-all">✅ إنهاء الورشة</button>}
+          <div className="glass-card p-4 rounded-2xl flex justify-between items-center shrink-0">
+            <div className="flex items-center gap-3"><button onClick={() => navigate('workshops')} className="p-2 hover:bg-zinc-800 rounded-lg transition-colors text-zinc-400"><Icon name="back" className="w-5 h-5" /></button><div><h2 className="text-xl font-bold text-zinc-100">{workshop.name}</h2><p className="text-zinc-500 text-sm">{workshop.location} | {workshop.status === 'active' ? '🟢 نشطة' : '✅ منتهية'}</p></div></div>
+            {workshop.status === 'active' && currentUser?.isAdmin && <button onClick={handleEndWorkshop} className="flex items-center gap-2 bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition-all"><Icon name="check" className="w-4 h-4" /> إنهاء الورشة</button>}
           </div>
-          
-          <div className="glass-card p-4 rounded-xl shrink-0">
-            <h3 className="text-sm font-bold text-slate-300 mb-3">👥 المشاركون ({workshop.participants?.length || 0})</h3>
+          <div className="glass-card p-4 rounded-2xl shrink-0">
+            <h3 className="text-sm font-bold text-zinc-400 mb-3">المشاركون ({workshop.participants?.length || 0})</h3>
             <div className="flex flex-wrap gap-2">
-              {workshop.participants?.map(p => (
-                <div key={p.id} className="flex items-center gap-2 bg-blue-500/10 text-blue-400 px-3 py-1 rounded-full text-xs">
-                  {p.name}
-                  {workshop.status === 'active' && <button onClick={() => removeParticipant(p.id)} className="text-red-400 font-bold hover:text-red-300">x</button>}
-                </div>
-              ))}
-              {workshop.status === 'active' && (
-                <select onChange={(e) => { const u = allUsers.find(u => u.id === e.target.value); if(u) addParticipant(u.id, u.name); }} value="" className="bg-slate-700 text-slate-300 px-3 py-1 rounded-full text-xs outline-none">
-                  <option value="">+ إضافة موظف</option>
-                  {allUsers.filter(u => !u.disabled && !workshop.participants?.some(p => p.id === u.id)).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                </select>
-              )}
+              {workshop.participants?.map(p => (<div key={p.id} className="flex items-center gap-2 bg-indigo-500/10 text-indigo-400 px-3 py-1.5 rounded-full text-xs font-medium">{p.name}{workshop.status === 'active' && <button onClick={() => removeParticipant(p.id)} className="text-rose-400 hover:text-rose-300 font-bold">x</button>}</div>))}
+              {workshop.status === 'active' && (<select onChange={(e) => { const u = allUsers.find(u => u.id === e.target.value); if(u) addParticipant(u.id, u.name); }} value="" className="bg-zinc-900 border border-zinc-800 text-zinc-300 px-3 py-1.5 rounded-full text-xs outline-none"><option value="">+ إضافة موظف</option>{allUsers.filter(u => !u.disabled && !workshop.participants?.some(p => p.id === u.id)).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select>)}
             </div>
           </div>
-          
-          <div className="glass-card p-4 rounded-xl shrink-0">
-            <h3 className="text-sm font-bold text-slate-300 mb-3">🔧 المعدات ({workshop.equipment?.length || 0})</h3>
+          <div className="glass-card p-4 rounded-2xl shrink-0">
+            <h3 className="text-sm font-bold text-zinc-400 mb-3">المعدات ({workshop.equipment?.length || 0})</h3>
             <div className="flex flex-wrap gap-2">
-              {workshop.equipment?.map(eq => (
-                <div key={eq.id} className="flex items-center gap-2 bg-orange-500/10 text-orange-400 px-3 py-1 rounded-full text-xs">
-                  {eq.name} ({eq.serial})
-                  {workshop.status === 'active' && <button onClick={() => removeEquipment(eq.id)} className="text-red-400 font-bold hover:text-red-300">x</button>}
-                </div>
-              ))}
-              {workshop.status === 'active' && availableEquipment.length > 0 && (
-                <select onChange={(e) => { const eq = availableEquipment.find(eq => eq.id === e.target.value); if(eq) addEquipment(eq.id, eq.name, eq.serial); }} value="" className="bg-slate-700 text-slate-300 px-3 py-1 rounded-full text-xs outline-none">
-                  <option value="">+ إضافة معدة</option>
-                  {availableEquipment.map(eq => <option key={eq.id} value={eq.id}>{eq.name} ({eq.serial})</option>)}
-                </select>
-              )}
+              {workshop.equipment?.map(eq => (<div key={eq.id} className="flex items-center gap-2 bg-amber-500/10 text-amber-400 px-3 py-1.5 rounded-full text-xs font-medium">{eq.name} ({eq.serial}){workshop.status === 'active' && <button onClick={() => removeEquipment(eq.id)} className="text-rose-400 hover:text-rose-300 font-bold">x</button>}</div>))}
+              {workshop.status === 'active' && availableEquipment.length > 0 && (<select onChange={(e) => { const eq = availableEquipment.find(eq => eq.id === e.target.value); if(eq) addEquipment(eq.id, eq.name, eq.serial); }} value="" className="bg-zinc-900 border border-zinc-800 text-zinc-300 px-3 py-1.5 rounded-full text-xs outline-none"><option value="">+ إضافة معدة</option>{availableEquipment.map(eq => <option key={eq.id} value={eq.id}>{eq.name} ({eq.serial})</option>)}</select>)}
             </div>
           </div>
-
-          <div className="flex-1 glass-card rounded-xl flex flex-col overflow-hidden min-h-0">
-            <div className="flex-1 p-4 overflow-y-auto space-y-3 custom-scrollbar">
+          <div className="flex-1 glass-card rounded-2xl flex flex-col overflow-hidden min-h-0">
+            <div className="flex-1 p-4 overflow-y-auto space-y-4 custom-scrollbar">
               {messages.map(msg => (
                 <div key={msg.id} className={`flex flex-col ${msg.senderId === currentUser.uid ? 'items-end' : 'items-start'} animate-fadeIn`}>
-                  <span className="text-xs text-slate-500 mb-1 flex items-center gap-1">
-                    {msg.senderName} 
-                    {msg.isAdmin && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded">مسؤول</span>}
-                  </span>
-                  <div className={`max-w-[70%] p-3 rounded-lg ${
-                    msg.isAdmin ? 'bg-gradient-to-l from-red-600 to-rose-600 text-white' : 
-                    (msg.senderId === currentUser.uid ? 'bg-gradient-to-l from-blue-600 to-indigo-600 text-white' : 'bg-slate-700 text-slate-100')
-                  }`}>
-                    <p className="text-sm break-words">{msg.text}</p>
-                  </div>
+                  <span className="text-xs text-zinc-500 mb-1.5 flex items-center gap-1.5">{msg.senderName} {msg.isAdmin && <span className="bg-violet-500 text-white text-[10px] px-1.5 py-0.5 rounded">مسؤول</span>}</span>
+                  <div className={`max-w-[70%] p-3 rounded-2xl ${msg.isAdmin ? 'bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white rounded-tr-sm' : (msg.senderId === currentUser.uid ? 'bg-indigo-600 text-white rounded-tr-sm' : 'bg-zinc-800 text-zinc-100 rounded-tl-sm')}`}><p className="text-sm break-words leading-relaxed">{msg.text}</p></div>
                 </div>
               ))}
               <div ref={messagesEndRef} />
             </div>
             {workshop.status === 'active' ? (
-              <form onSubmit={sendMessage} className="p-4 border-t border-slate-700/50 flex gap-2 shrink-0">
-                <input type="text" value={newMsg} onChange={e=>setNewMsg(e.target.value)} placeholder="اكتب رسالة..." className="flex-1 bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
-                <button type="submit" className="btn-primary px-6 rounded-lg font-medium text-white">إرسال</button>
+              <form onSubmit={sendMessage} className="p-4 border-t border-zinc-800 flex items-center gap-2 shrink-0">
+                <input type="text" value={newMsg} onChange={e=>setNewMsg(e.target.value)} placeholder="اكتب رسالة..." className="flex-1 bg-zinc-900 border border-zinc-800 p-3 rounded-xl outline-none focus:border-indigo-500 transition-colors" />
+                <button type="submit" className="btn-primary p-3 rounded-xl text-white flex items-center justify-center transition-transform hover:scale-105"><Icon name="send" className="w-5 h-5" /></button>
               </form>
-            ) : <div className="p-4 border-t border-slate-700/50 text-center text-slate-500 text-sm shrink-0">هذه الورشة منتهية، الشات للقراءة فقط.</div>}
+            ) : <div className="p-4 border-t border-zinc-800 text-center text-zinc-500 text-sm shrink-0">هذه الورشة منتهية، الشات للقراءة فقط.</div>}
           </div>
         </div>
       );
     }
 
     function GeneralChat() {
-      const { currentUser } = useApp();
-      const [messages, setMessages] = useState([]); const [newMsg, setNewMsg] = useState('');
-      const messagesEndRef = useRef(null);
-
-      useEffect(() => {
-        const unsub = db.collection('general_chat').orderBy('timestamp', 'asc').onSnapshot(snap => setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-        return () => unsub();
-      }, []);
-
+      const { currentUser } = useApp(); const [messages, setMessages] = useState([]); const [newMsg, setNewMsg] = useState(''); const messagesEndRef = useRef(null);
+      useEffect(() => { const unsub = db.collection('general_chat').orderBy('timestamp', 'asc').onSnapshot(snap => setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })))); return () => unsub(); }, []);
       useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
-
-      const sendMessage = async (e) => {
-        e.preventDefault(); if (!newMsg.trim()) return;
-        await db.collection('general_chat').add({ 
-          text: newMsg, 
-          senderId: currentUser.uid, 
-          senderName: currentUser.name, 
-          isAdmin: currentUser.isAdmin || false, 
-          timestamp: firebase.firestore.FieldValue.serverTimestamp() 
-        });
-        setNewMsg('');
-      };
-
-      const handleDeleteMessage = async (msgId) => {
-        if (!window.confirm("هل أنت متأكد من حذف هذه الرسالة؟")) return;
-        await db.collection('general_chat').doc(msgId).delete();
-      };
-
+      const sendMessage = async (e) => { e.preventDefault(); if (!newMsg.trim()) return; await db.collection('general_chat').add({ text: newMsg, senderId: currentUser.uid, senderName: currentUser.name, isAdmin: currentUser.isAdmin || false, timestamp: firebase.firestore.FieldValue.serverTimestamp() }); setNewMsg(''); };
+      const handleDeleteMessage = async (msgId) => { if (!window.confirm("هل أنت متأكد من حذف هذه الرسالة؟")) return; await db.collection('general_chat').doc(msgId).delete(); };
       return (
         <div className="flex flex-col h-[calc(100vh-120px)] animate-fadeIn gap-4">
-          <div className="glass-card p-4 rounded-xl flex items-center gap-3 shrink-0">
-            <span className="text-2xl">💬</span>
-            <div><h2 className="text-xl font-bold">الشات العام</h2><p className="text-slate-400 text-sm">مساحة التواصل المفتوح</p></div>
+          <div className="glass-card p-4 rounded-2xl flex items-center gap-3 shrink-0">
+            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400"><Icon name="chat" className="w-6 h-6" /></div>
+            <div><h2 className="text-xl font-bold text-zinc-100">الشات العام</h2><p className="text-zinc-500 text-sm">مساحة التواصل المفتوح</p></div>
           </div>
-          <div className="flex-1 glass-card rounded-xl flex flex-col overflow-hidden min-h-0">
-            <div className="flex-1 p-4 overflow-y-auto space-y-3 custom-scrollbar">
+          <div className="flex-1 glass-card rounded-2xl flex flex-col overflow-hidden min-h-0">
+            <div className="flex-1 p-4 overflow-y-auto space-y-4 custom-scrollbar">
               {messages.map(msg => (
                 <div key={msg.id} className={`flex flex-col ${msg.senderId === currentUser.uid ? 'items-end' : 'items-start'} animate-fadeIn`}>
-                  <span className="text-xs text-slate-500 mb-1 flex items-center gap-1">
-                    {msg.senderName} 
-                    {msg.isAdmin && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded">مسؤول</span>}
-                  </span>
-                  <div className={`max-w-[70%] p-3 rounded-lg ${
-                    msg.isAdmin ? 'bg-gradient-to-l from-red-600 to-rose-600 text-white' : 
-                    (msg.senderId === currentUser.uid ? 'bg-gradient-to-l from-blue-600 to-indigo-600 text-white' : 'bg-slate-700 text-slate-100')
-                  }`}>
-                    <p className="text-sm break-words">{msg.text}</p>
-                  </div>
-                  {currentUser?.isAdmin && (
-                    <button onClick={() => handleDeleteMessage(msg.id)} className="text-red-400 hover:text-red-300 text-xs mt-1 transition-colors">حذف الرسالة</button>
-                  )}
+                  <span className="text-xs text-zinc-500 mb-1.5 flex items-center gap-1.5">{msg.senderName} {msg.isAdmin && <span className="bg-violet-500 text-white text-[10px] px-1.5 py-0.5 rounded">مسؤول</span>}</span>
+                  <div className={`max-w-[70%] p-3 rounded-2xl ${msg.isAdmin ? 'bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white rounded-tr-sm' : (msg.senderId === currentUser.uid ? 'bg-indigo-600 text-white rounded-tr-sm' : 'bg-zinc-800 text-zinc-100 rounded-tl-sm')}`}><p className="text-sm break-words leading-relaxed">{msg.text}</p></div>
+                  {currentUser?.isAdmin && (<button onClick={() => handleDeleteMessage(msg.id)} className="flex items-center gap-1 text-zinc-600 hover:text-rose-400 text-xs mt-1.5 transition-colors"><Icon name="trash" className="w-3 h-3" /> حذف</button>)}
                 </div>
               ))}
               <div ref={messagesEndRef} />
             </div>
-            <form onSubmit={sendMessage} className="p-4 border-t border-slate-700/50 flex gap-2 shrink-0">
-              <input type="text" value={newMsg} onChange={e=>setNewMsg(e.target.value)} placeholder="اكتب رسالة للجميع..." className="flex-1 bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
-              <button type="submit" className="btn-primary px-6 rounded-lg font-medium text-white">إرسال</button>
+            <form onSubmit={sendMessage} className="p-4 border-t border-zinc-800 flex items-center gap-2 shrink-0">
+              <input type="text" value={newMsg} onChange={e=>setNewMsg(e.target.value)} placeholder="اكتب رسالة للجميع..." className="flex-1 bg-zinc-900 border border-zinc-800 p-3 rounded-xl outline-none focus:border-indigo-500 transition-colors" />
+              <button type="submit" className="btn-primary p-3 rounded-xl text-white flex items-center justify-center transition-transform hover:scale-105"><Icon name="send" className="w-5 h-5" /></button>
             </form>
           </div>
         </div>
@@ -705,26 +518,18 @@
     }
 
     function Archive() {
-      const { navigate } = useApp();
-      const [archived, setArchived] = useState([]);
-      useEffect(() => {
-        const unsub = db.collection('workshops').where('status', '==', 'archived').onSnapshot(snap => setArchived(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-        return () => unsub();
-      }, []);
-
+      const { navigate } = useApp(); const [archived, setArchived] = useState([]);
+      useEffect(() => { const unsub = db.collection('workshops').where('status', '==', 'archived').onSnapshot(snap => setArchived(snap.docs.map(d => ({ id: d.id, ...d.data() })))); return () => unsub(); }, []);
       return (
         <div className="animate-fadeIn">
-          <h2 className="text-2xl font-bold mb-6">📚 أرشيف الورشات المنتهية</h2>
-          {archived.length === 0 ? <div className="text-center text-slate-500 mt-20"><p>لا يوجد أرشيف حالياً</p></div> : (
+          <h2 className="text-2xl font-bold mb-6 text-zinc-100">أرشيف الورشات المنتهية</h2>
+          {archived.length === 0 ? <div className="text-center text-zinc-600 mt-20"><Icon name="archive" className="w-12 h-12 mx-auto mb-2 opacity-50" /><p>لا يوجد أرشيف حالياً</p></div> : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {archived.map(ws => (
-                <button onClick={() => navigate('workshop-details', ws.id)} key={ws.id} className="text-right glass-card p-5 rounded-xl card-hover opacity-90 hover:opacity-100">
-                  <h3 className="text-lg font-bold mb-2 text-slate-300">{ws.name}</h3>
-                  <p className="text-slate-500 text-sm">📍 {ws.location}</p>
-                  <div className="mt-4 flex justify-between items-center text-xs">
-                    <span className="bg-slate-700/50 text-slate-400 px-2 py-1 rounded">✅ منتهية</span>
-                    <span className="text-slate-600">{ws.equipment?.length || 0} معدات | {ws.participants?.length || 0} موظفين</span>
-                  </div>
+                <button onClick={() => navigate('workshop-details', ws.id)} key={ws.id} className="text-right glass-card p-5 rounded-2xl card-hover opacity-80 hover:opacity-100">
+                  <h3 className="text-lg font-bold mb-2 text-zinc-300">{ws.name}</h3>
+                  <p className="text-zinc-500 text-sm flex items-center gap-2"><Icon name="workshops" className="w-4 h-4" /> {ws.location}</p>
+                  <div className="mt-4 flex justify-between items-center text-xs"><span className="bg-zinc-800 text-zinc-400 px-2 py-1 rounded-md">منتهية</span><span className="text-zinc-600">{ws.equipment?.length || 0} معدات | {ws.participants?.length || 0} موظفين</span></div>
                 </button>
               ))}
             </div>
@@ -734,191 +539,75 @@
     }
 
     function Equipment() {
-      const { currentUser } = useApp();
-      const [equipment, setEquipment] = useState([]);
-      const [isModalOpen, setIsModalOpen] = useState(false);
-      const [name, setName] = useState(''); const [serial, setSerial] = useState('');
-
-      useEffect(() => {
-        const unsub = db.collection('equipment').onSnapshot(snap => setEquipment(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-        return () => unsub();
-      }, []);
-
-      const handleAdd = async (e) => {
-        e.preventDefault();
-        const docRef = await db.collection('equipment').add({ name, serial, status: 'available', createdAt: firebase.firestore.FieldValue.serverTimestamp(), currentWorkshopName: null });
-        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'equipment', action: 'add', entityId: docRef.id, entityName: name, newValue: 'available' });
-        setName(''); setSerial(''); setIsModalOpen(false);
-      };
-
-      const handleDelete = async (eqId, eqName) => {
-        if (!window.confirm(`هل أنت متأكد من حذف المعدة "${eqName}"؟`)) return;
-        await db.collection('equipment').doc(eqId).delete();
-        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'equipment', action: 'delete', entityId: eqId, entityName: eqName });
-      };
-
-      const statusStyles = { available: 'bg-green-500/10 text-green-400', in_use: 'bg-orange-500/10 text-orange-400', maintenance: 'bg-red-500/10 text-red-400' };
-
+      const { currentUser } = useApp(); const [equipment, setEquipment] = useState([]); const [isModalOpen, setIsModalOpen] = useState(false); const [name, setName] = useState(''); const [serial, setSerial] = useState('');
+      useEffect(() => { const unsub = db.collection('equipment').onSnapshot(snap => setEquipment(snap.docs.map(d => ({ id: d.id, ...d.data() })))); return () => unsub(); }, []);
+      const handleAdd = async (e) => { e.preventDefault(); const docRef = await db.collection('equipment').add({ name, serial, status: 'available', createdAt: firebase.firestore.FieldValue.serverTimestamp(), currentWorkshopName: null }); await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'equipment', action: 'add', entityId: docRef.id, entityName: name, newValue: 'available' }); setName(''); setSerial(''); setIsModalOpen(false); };
+      const handleDelete = async (eqId, eqName) => { if (!window.confirm(`هل أنت متأكد من حذف المعدة "${eqName}"؟`)) return; await db.collection('equipment').doc(eqId).delete(); await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'equipment', action: 'delete', entityId: eqId, entityName: eqName }); };
+      const statusStyles = { available: 'bg-emerald-500/10 text-emerald-400', in_use: 'bg-amber-500/10 text-amber-400', maintenance: 'bg-rose-500/10 text-rose-400' };
       return (
         <div className="animate-fadeIn">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold">إدارة المعدات</h2>
-            {currentUser?.isAdmin && <button onClick={() => setIsModalOpen(true)} className="btn-primary px-4 py-2 rounded-lg font-medium text-white">+ إضافة معدة</button>}
-          </div>
-          <div className="glass-card rounded-xl overflow-hidden overflow-x-auto">
+          <div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold text-zinc-100">إدارة المعدات</h2>{currentUser?.isAdmin && <button onClick={() => setIsModalOpen(true)} className="btn-primary flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-white"><Icon name="plus" className="w-4 h-4" /> إضافة معدة</button>}</div>
+          <div className="glass-card rounded-2xl overflow-hidden overflow-x-auto">
             <table className="w-full text-right min-w-[600px]">
-              <thead className="bg-slate-900/50 text-slate-400 text-sm">
-                <tr><th className="p-4">اسم المعدة</th><th className="p-4">الرقم التسلسلي</th><th className="p-4">الحالة</th><th className="p-4">الموقع الحالي</th><th className="p-4 text-center">إجراءات</th></tr>
-              </thead>
+              <thead className="bg-zinc-900 text-zinc-500 text-sm border-b border-zinc-800"><tr><th className="p-4 font-medium">اسم المعدة</th><th className="p-4 font-medium">الرقم التسلسلي</th><th className="p-4 font-medium">الحالة</th><th className="p-4 font-medium">الموقع الحالي</th><th className="p-4 font-medium text-center">إجراءات</th></tr></thead>
               <tbody>
                 {equipment.map(eq => (
-                  <tr key={eq.id} className="border-t border-slate-700/50 hover:bg-slate-700/20 transition-colors">
-                    <td className="p-4 font-medium">{eq.name}</td>
-                    <td className="p-4 text-slate-400">{eq.serial}</td>
-                    <td className="p-4"><span className={`px-3 py-1 rounded-full text-xs ${statusStyles[eq.status]}`}>{eq.status === 'available' ? '🟢 متوفرة' : eq.status === 'in_use' ? '🟠 مستخدمة' : '🔴 صيانة'}</span></td>
-                    <td className="p-4 text-slate-400 text-sm">{eq.currentWorkshopName || '—'}</td>
-                    <td className="p-4 text-center">
-                      {currentUser?.isAdmin && <button onClick={() => handleDelete(eq.id, eq.name)} className="text-red-400 hover:text-red-300 text-sm font-medium transition-colors">حذف</button>}
-                      {!currentUser?.isAdmin && <span className="text-slate-600 text-sm">—</span>}
-                    </td>
+                  <tr key={eq.id} className="border-t border-zinc-800 hover:bg-zinc-900 transition-colors text-zinc-300">
+                    <td className="p-4 font-medium">{eq.name}</td><td className="p-4 text-zinc-500">{eq.serial}</td>
+                    <td className="p-4"><span className={`px-3 py-1 rounded-full text-xs ${statusStyles[eq.status]}`}>{eq.status === 'available' ? 'متوفرة' : eq.status === 'in_use' ? 'مستخدمة' : 'صيانة'}</span></td>
+                    <td className="p-4 text-zinc-500 text-sm">{eq.currentWorkshopName || '—'}</td>
+                    <td className="p-4 text-center">{currentUser?.isAdmin ? <button onClick={() => handleDelete(eq.id, eq.name)} className="text-rose-400 hover:text-rose-300 text-sm font-medium transition-colors inline-flex items-center gap-1"><Icon name="trash" className="w-4 h-4" /> حذف</button> : <span className="text-zinc-700 text-sm">—</span>}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-
-          {isModalOpen && (
-            <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-sm p-4 min-h-screen">
-              <div className="glass-card p-6 rounded-2xl w-full max-w-md animate-popIn">
-                <h3 className="text-xl font-bold mb-4">إضافة معدة جديدة</h3>
-                <form onSubmit={handleAdd} className="space-y-4">
-                  <input type="text" placeholder="اسم المعدة" value={name} onChange={e=>setName(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
-                  <input type="text" placeholder="الرقم التسلسلي" value={serial} onChange={e=>setSerial(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
-                  <div className="flex gap-3">
-                    <button type="submit" className="flex-1 btn-primary py-3 rounded-lg font-medium text-white">إضافة</button>
-                    <button type="button" onClick={()=>setIsModalOpen(false)} className="flex-1 bg-slate-700 hover:bg-slate-600 py-3 rounded-lg font-medium">إلغاء</button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
+          {isModalOpen && (<div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 min-h-screen"><div className="glass-card p-6 rounded-2xl w-full max-w-md animate-popIn"><h3 className="text-xl font-bold mb-4 text-zinc-100">إضافة معدة جديدة</h3><form onSubmit={handleAdd} className="space-y-4"><input type="text" placeholder="اسم المعدة" value={name} onChange={e=>setName(e.target.value)} required className="w-full bg-zinc-900 border border-zinc-800 p-3 rounded-lg outline-none focus:border-indigo-500" /><input type="text" placeholder="الرقم التسلسلي" value={serial} onChange={e=>setSerial(e.target.value)} required className="w-full bg-zinc-900 border border-zinc-800 p-3 rounded-lg outline-none focus:border-indigo-500" /><div className="flex gap-3 pt-2"><button type="submit" className="flex-1 btn-primary py-3 rounded-lg font-medium text-white">إضافة</button><button type="button" onClick={()=>setIsModalOpen(false)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 py-3 rounded-lg font-medium">إلغاء</button></div></form></div></div>)}
         </div>
       );
     }
 
     function Inventory() {
-      const { currentUser } = useApp();
-      const [items, setItems] = useState([]);
-      const [isModalOpen, setIsModalOpen] = useState(false);
-      const [name, setName] = useState(''); const [quantity, setQuantity] = useState(''); const [price, setPrice] = useState('');
-
-      useEffect(() => {
-        const unsub = db.collection('inventory').onSnapshot(snap => setItems(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-        return () => unsub();
-      }, []);
-
-      const handleAdd = async (e) => {
-        e.preventDefault();
-        await db.collection('inventory').add({ name, quantity: parseInt(quantity), price: parseFloat(price), createdAt: firebase.firestore.FieldValue.serverTimestamp() });
-        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'inventory', action: 'add', entityId: 'inv', entityName: name });
-        setName(''); setQuantity(''); setPrice(''); setIsModalOpen(false);
-      };
-
-      const handleDelete = async (id, name) => {
-        if (!window.confirm(`حذف المادة "${name}"؟`)) return;
-        await db.collection('inventory').doc(id).delete();
-        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'inventory', action: 'delete', entityId: id, entityName: name });
-      };
-
+      const { currentUser } = useApp(); const [items, setItems] = useState([]); const [isModalOpen, setIsModalOpen] = useState(false); const [name, setName] = useState(''); const [quantity, setQuantity] = useState(''); const [price, setPrice] = useState('');
+      useEffect(() => { const unsub = db.collection('inventory').onSnapshot(snap => setItems(snap.docs.map(d => ({ id: d.id, ...d.data() })))); return () => unsub(); }, []);
+      const handleAdd = async (e) => { e.preventDefault(); await db.collection('inventory').add({ name, quantity: parseInt(quantity), price: parseFloat(price), createdAt: firebase.firestore.FieldValue.serverTimestamp() }); await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'inventory', action: 'add', entityId: 'inv', entityName: name }); setName(''); setQuantity(''); setPrice(''); setIsModalOpen(false); };
+      const handleDelete = async (id, name) => { if (!window.confirm(`حذف المادة "${name}"؟`)) return; await db.collection('inventory').doc(id).delete(); await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'inventory', action: 'delete', entityId: id, entityName: name }); };
       const totalValue = items.reduce((acc, item) => acc + (item.quantity * item.price), 0);
-
       return (
         <div className="animate-fadeIn">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h2 className="text-2xl font-bold">📦 حساب المواد</h2>
-              <p className="text-slate-400 text-sm">إجمالي قيمة المواد: <span className="font-bold text-green-400">{totalValue.toFixed(2)} د.أ</span></p>
-            </div>
-            <button onClick={() => setIsModalOpen(true)} className="btn-primary px-4 py-2 rounded-lg font-medium text-white">+ إضافة مادة</button>
-          </div>
-          <div className="glass-card rounded-xl overflow-hidden overflow-x-auto">
+          <div className="flex justify-between items-center mb-6"><div><h2 className="text-2xl font-bold text-zinc-100">حساب المواد</h2><p className="text-zinc-500 text-sm">إجمالي قيمة المواد: <span className="font-bold text-emerald-400">{totalValue.toFixed(2)} د.أ</span></p></div><button onClick={() => setIsModalOpen(true)} className="btn-primary flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-white"><Icon name="plus" className="w-4 h-4" /> إضافة مادة</button></div>
+          <div className="glass-card rounded-2xl overflow-hidden overflow-x-auto">
             <table className="w-full text-right min-w-[600px]">
-              <thead className="bg-slate-900/50 text-slate-400 text-sm">
-                <tr><th className="p-4">اسم المادة</th><th className="p-4">الكمية</th><th className="p-4">سعر الوحدة</th><th className="p-4">الإجمالي</th><th className="p-4 text-center">إجراءات</th></tr>
-              </thead>
+              <thead className="bg-zinc-900 text-zinc-500 text-sm border-b border-zinc-800"><tr><th className="p-4 font-medium">اسم المادة</th><th className="p-4 font-medium">الكمية</th><th className="p-4 font-medium">سعر الوحدة</th><th className="p-4 font-medium">الإجمالي</th><th className="p-4 font-medium text-center">إجراءات</th></tr></thead>
               <tbody>
                 {items.map(item => (
-                  <tr key={item.id} className="border-t border-slate-700/50 hover:bg-slate-700/20">
-                    <td className="p-4 font-medium">{item.name}</td>
-                    <td className="p-4 text-slate-400">{item.quantity}</td>
-                    <td className="p-4 text-slate-400">{item.price.toFixed(2)}</td>
-                    <td className="p-4 text-green-400 font-medium">{(item.quantity * item.price).toFixed(2)}</td>
-                    <td className="p-4 text-center">
-                      <button onClick={() => handleDelete(item.id, item.name)} className="text-red-400 hover:text-red-300 text-sm font-medium">حذف</button>
-                    </td>
-                  </tr>
+                  <tr key={item.id} className="border-t border-zinc-800 hover:bg-zinc-900 text-zinc-300"><td className="p-4 font-medium">{item.name}</td><td className="p-4 text-zinc-500">{item.quantity}</td><td className="p-4 text-zinc-500">{item.price.toFixed(2)}</td><td className="p-4 text-emerald-400 font-medium">{(item.quantity * item.price).toFixed(2)}</td><td className="p-4 text-center"><button onClick={() => handleDelete(item.id, item.name)} className="text-rose-400 hover:text-rose-300 text-sm font-medium transition-colors inline-flex items-center gap-1"><Icon name="trash" className="w-4 h-4" /> حذف</button></td></tr>
                 ))}
               </tbody>
             </table>
           </div>
-
-          {isModalOpen && (
-            <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-sm p-4 min-h-screen">
-              <div className="glass-card p-6 rounded-2xl w-full max-w-md animate-popIn">
-                <h3 className="text-xl font-bold mb-4">إضافة مادة جديدة</h3>
-                <form onSubmit={handleAdd} className="space-y-4">
-                  <input type="text" placeholder="اسم المادة" value={name} onChange={e=>setName(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
-                  <input type="number" placeholder="الكمية" value={quantity} onChange={e=>setQuantity(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
-                  <input type="number" step="0.01" placeholder="سعر الوحدة" value={price} onChange={e=>setPrice(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
-                  <div className="flex gap-3">
-                    <button type="submit" className="flex-1 btn-primary py-3 rounded-lg font-medium text-white">إضافة</button>
-                    <button type="button" onClick={()=>setIsModalOpen(false)} className="flex-1 bg-slate-700 hover:bg-slate-600 py-3 rounded-lg font-medium">إلغاء</button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
+          {isModalOpen && (<div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 min-h-screen"><div className="glass-card p-6 rounded-2xl w-full max-w-md animate-popIn"><h3 className="text-xl font-bold mb-4 text-zinc-100">إضافة مادة جديدة</h3><form onSubmit={handleAdd} className="space-y-4"><input type="text" placeholder="اسم المادة" value={name} onChange={e=>setName(e.target.value)} required className="w-full bg-zinc-900 border border-zinc-800 p-3 rounded-lg outline-none focus:border-indigo-500" /><input type="number" placeholder="الكمية" value={quantity} onChange={e=>setQuantity(e.target.value)} required className="w-full bg-zinc-900 border border-zinc-800 p-3 rounded-lg outline-none focus:border-indigo-500" /><input type="number" step="0.01" placeholder="سعر الوحدة" value={price} onChange={e=>setPrice(e.target.value)} required className="w-full bg-zinc-900 border border-zinc-800 p-3 rounded-lg outline-none focus:border-indigo-500" /><div className="flex gap-3 pt-2"><button type="submit" className="flex-1 btn-primary py-3 rounded-lg font-medium text-white">إضافة</button><button type="button" onClick={()=>setIsModalOpen(false)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 py-3 rounded-lg font-medium">إلغاء</button></div></form></div></div>)}
         </div>
       );
     }
 
     function Notes() {
-      const { currentUser } = useApp();
-      const [notes, setNotes] = useState([]);
-      const [text, setText] = useState('');
-
-      useEffect(() => {
-        const unsub = db.collection('notes').orderBy('createdAt', 'desc').onSnapshot(snap => setNotes(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-        return () => unsub();
-      }, []);
-
-      const handleAdd = async (e) => {
-        e.preventDefault(); if (!text.trim()) return;
-        await db.collection('notes').add({ text, userId: currentUser.uid, userName: currentUser.name, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
-        setText('');
-      };
-
-      const handleDelete = async (id) => {
-        if (!window.confirm("هل أنت متأكد من حذف هذه الملاحظة؟")) return;
-        await db.collection('notes').doc(id).delete();
-      };
-
+      const { currentUser } = useApp(); const [notes, setNotes] = useState([]); const [text, setText] = useState('');
+      useEffect(() => { const unsub = db.collection('notes').orderBy('createdAt', 'desc').onSnapshot(snap => setNotes(snap.docs.map(d => ({ id: d.id, ...d.data() })))); return () => unsub(); }, []);
+      const handleAdd = async (e) => { e.preventDefault(); if (!text.trim()) return; await db.collection('notes').add({ text, userId: currentUser.uid, userName: currentUser.name, createdAt: firebase.firestore.FieldValue.serverTimestamp() }); setText(''); };
+      const handleDelete = async (id) => { if (!window.confirm("هل أنت متأكد من حذف هذه الملاحظة؟")) return; await db.collection('notes').doc(id).delete(); };
       return (
         <div className="animate-fadeIn">
-          <h2 className="text-2xl font-bold mb-6">📝 ملاحظات عامة</h2>
-          <form onSubmit={handleAdd} className="glass-card p-4 rounded-xl mb-6 flex flex-col md:flex-row gap-2">
-            <textarea placeholder="اكتب ملاحظة هنا..." value={text} onChange={e=>setText(e.target.value)} required className="flex-1 bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500 resize-none" rows="2"></textarea>
-            <button type="submit" className="btn-primary px-6 rounded-lg font-medium text-white md:w-32">إضافة</button>
+          <h2 className="text-2xl font-bold mb-6 text-zinc-100">ملاحظات عامة</h2>
+          <form onSubmit={handleAdd} className="glass-card p-4 rounded-2xl mb-6 flex flex-col md:flex-row gap-2">
+            <textarea placeholder="اكتب ملاحظة هنا..." value={text} onChange={e=>setText(e.target.value)} required className="flex-1 bg-zinc-900 border border-zinc-800 p-3 rounded-lg outline-none focus:border-indigo-500 resize-none text-zinc-200" rows="2"></textarea>
+            <button type="submit" className="btn-primary flex items-center justify-center gap-2 px-6 rounded-lg font-medium text-white md:w-32"><Icon name="plus" className="w-4 h-4" /> إضافة</button>
           </form>
-          
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {notes.map(note => (
-              <div key={note.id} className="glass-card p-4 rounded-xl flex flex-col justify-between animate-fadeIn card-hover">
-                <p className="text-slate-200 mb-4 whitespace-pre-wrap break-words">{note.text}</p>
-                <div className="flex items-center justify-between border-t border-slate-700/50 pt-2 mt-2">
-                  <span className="text-xs text-slate-500">{note.userName} - {note.createdAt?.toDate().toLocaleDateString('ar-EG')}</span>
-                  <button onClick={() => handleDelete(note.id)} className="text-red-400 hover:text-red-300 text-sm font-medium">حذف</button>
-                </div>
+              <div key={note.id} className="glass-card p-5 rounded-2xl flex flex-col justify-between animate-fadeIn card-hover">
+                <p className="text-zinc-200 mb-6 whitespace-pre-wrap break-words leading-relaxed">{note.text}</p>
+                <div className="flex items-center justify-between border-t border-zinc-800 pt-3 mt-2"><span className="text-xs text-zinc-600">{note.userName} - {note.createdAt?.toDate().toLocaleDateString('ar-EG')}</span><button onClick={() => handleDelete(note.id)} className="text-rose-400 hover:text-rose-300 text-sm font-medium transition-colors inline-flex items-center gap-1"><Icon name="trash" className="w-4 h-4" /> حذف</button></div>
               </div>
             ))}
           </div>
@@ -928,29 +617,22 @@
 
     function ActivityLog() {
       const [logs, setLogs] = useState([]); const [filter, setFilter] = useState('all');
-      useEffect(() => {
-        const unsub = db.collection('activity_logs').orderBy('timestamp', 'desc').onSnapshot(snap => setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-        return () => unsub();
-      }, []);
-
+      useEffect(() => { const unsub = db.collection('activity_logs').orderBy('timestamp', 'desc').onSnapshot(snap => setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })))); return () => unsub(); }, []);
       const filteredLogs = logs.filter(log => filter === 'all' || log.type === filter);
       const filters = [{ id: 'all', label: 'الكل' }, { id: 'workshop', label: 'الورشات' }, { id: 'equipment', label: 'المعدات' }, { id: 'user', label: 'الموظفون' }];
-      const getTypeStyle = (type) => type === 'workshop' ? 'bg-blue-500/10 text-blue-400' : type === 'equipment' ? 'bg-orange-500/10 text-orange-400' : 'bg-slate-500/10 text-slate-400';
-
+      const getTypeStyle = (type) => type === 'workshop' ? 'bg-indigo-500/10 text-indigo-400' : type === 'equipment' ? 'bg-amber-500/10 text-amber-400' : 'bg-zinc-500/10 text-zinc-400';
       return (
         <div className="animate-fadeIn">
-          <h2 className="text-2xl font-bold mb-6">سجل النشاط</h2>
-          <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-            {filters.map(f => <button key={f.id} onClick={() => setFilter(f.id)} className={`px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-all ${filter === f.id ? 'btn-primary text-white' : 'glass-card text-slate-400 hover:text-white'}`}>{f.label}</button>)}
-          </div>
+          <h2 className="text-2xl font-bold mb-6 text-zinc-100">سجل النشاط</h2>
+          <div className="flex gap-2 mb-4 overflow-x-auto pb-2">{filters.map(f => <button key={f.id} onClick={() => setFilter(f.id)} className={`px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${filter === f.id ? 'btn-primary text-white' : 'glass-card text-zinc-400 hover:text-white'}`}>{f.label}</button>)}</div>
           <div className="space-y-3">
             {filteredLogs.map(log => (
               <div key={log.id} className="glass-card p-4 rounded-xl flex items-start gap-4 animate-fadeIn">
-                <div className={`px-2 py-1 rounded text-xs font-bold ${getTypeStyle(log.type)}`}>{log.type}</div>
+                <div className={`px-3 py-1 rounded-md text-xs font-bold ${getTypeStyle(log.type)}`}>{log.type}</div>
                 <div className="flex-1">
-                  <p className="text-sm"><span className="font-bold text-blue-400">{log.userName}</span> {log.action === 'create' ? 'أنشأ' : log.action === 'end_workshop' ? 'أنهى' : log.action === 'assign' ? 'أضاف معدة إلى' : log.action === 'delete' ? 'حذف' : 'عدّل'} <span className="font-bold">{log.entityName}</span></p>
-                  {log.oldValue && log.newValue && <div className="mt-2 text-xs bg-slate-900/50 p-2 rounded flex gap-4"><span className="text-red-400">قبل: {log.oldValue}</span><span className="text-green-400">بعد: {log.newValue}</span></div>}
-                  <span className="text-xs text-slate-500 mt-1 block">{log.timestamp?.toDate().toLocaleString('ar-EG') || ''}</span>
+                  <p className="text-sm text-zinc-300"><span className="font-bold text-indigo-400">{log.userName}</span> {log.action === 'create' ? 'أنشأ' : log.action === 'end_workshop' ? 'أنهى' : log.action === 'assign' ? 'أضاف معدة إلى' : log.action === 'delete' ? 'حذف' : 'عدّل'} <span className="font-bold text-zinc-100">{log.entityName}</span></p>
+                  {log.oldValue && log.newValue && <div className="mt-2 text-xs bg-zinc-900 p-2 rounded flex gap-4"><span className="text-rose-400">قبل: {log.oldValue}</span><span className="text-emerald-400">بعد: {log.newValue}</span></div>}
+                  <span className="text-xs text-zinc-600 mt-1.5 block">{log.timestamp?.toDate().toLocaleString('ar-EG') || ''}</span>
                 </div>
               </div>
             ))}
@@ -960,148 +642,47 @@
     }
 
     function Users() {
-      const { currentUser } = useApp();
-      const [users, setUsers] = useState([]);
-      const [isModalOpen, setIsModalOpen] = useState(false);
-      const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [name, setName] = useState('');
-
-      useEffect(() => {
-        const unsub = db.collection('users').onSnapshot(snap => setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-        return () => unsub();
-      }, []);
-
-      const handleAddUser = async (e) => {
-        e.preventDefault();
-        try {
-          const secondaryApp = firebase.initializeApp(firebaseConfig, "Secondary_" + Date.now());
-          const secondaryAuth = secondaryApp.auth();
-          const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, password);
-          await db.collection('users').doc(userCredential.user.uid).set({ email, name, status: 'offline', disabled: false });
-          await secondaryAuth.signOut(); await secondaryApp.delete();
-          setEmail(''); setPassword(''); setName(''); setIsModalOpen(false);
-        } catch (error) { alert("خطأ في إنشاء الحساب: " + error.message); }
-      };
-
-      const handleDisableUser = async (userId, userName) => {
-        if (userId === currentUser.uid) { alert("لا يمكنك تعطيل حسابك أثناء استخدامه."); return; }
-        if (!window.confirm(`هل أنت متأكد من تعطيل الموظف "${userName}"؟`)) return;
-        await db.collection('users').doc(userId).update({ disabled: true, status: 'offline' });
-        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'user', action: 'disable', entityId: userId, entityName: userName });
-      };
-
-      const handleEnableUser = async (userId, userName) => {
-        if (!window.confirm(`هل أنت متأكد من تفعيل حساب الموظف "${userName}"؟`)) return;
-        await db.collection('users').doc(userId).update({ disabled: false });
-        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'user', action: 'enable', entityId: userId, entityName: userName });
-      };
-
-      const activeUsers = users.filter(u => !u.disabled);
-      const disabledUsers = users.filter(u => u.disabled);
-
+      const { currentUser } = useApp(); const [users, setUsers] = useState([]); const [isModalOpen, setIsModalOpen] = useState(false); const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [name, setName] = useState('');
+      useEffect(() => { const unsub = db.collection('users').onSnapshot(snap => setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })))); return () => unsub(); }, []);
+      const handleAddUser = async (e) => { e.preventDefault(); try { const secondaryApp = firebase.initializeApp(firebaseConfig, "Secondary_" + Date.now()); const secondaryAuth = secondaryApp.auth(); const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, password); await db.collection('users').doc(userCredential.user.uid).set({ email, name, status: 'offline', disabled: false }); await secondaryAuth.signOut(); await secondaryApp.delete(); setEmail(''); setPassword(''); setName(''); setIsModalOpen(false); } catch (error) { alert("خطأ في إنشاء الحساب: " + error.message); } };
+      const handleDisableUser = async (userId, userName) => { if (userId === currentUser.uid) { alert("لا يمكنك تعطيل حسابك أثناء استخدامه."); return; } if (!window.confirm(`هل أنت متأكد من تعطيل الموظف "${userName}"؟`)) return; await db.collection('users').doc(userId).update({ disabled: true, status: 'offline' }); await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'user', action: 'disable', entityId: userId, entityName: userName }); };
+      const handleEnableUser = async (userId, userName) => { if (!window.confirm(`هل أنت متأكد من تفعيل حساب الموظف "${userName}"؟`)) return; await db.collection('users').doc(userId).update({ disabled: false }); await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'user', action: 'enable', entityId: userId, entityName: userName }); };
+      const activeUsers = users.filter(u => !u.disabled); const disabledUsers = users.filter(u => u.disabled);
       const renderUserCard = (user) => (
-        <div key={user.id} className={`glass-card p-4 rounded-xl flex items-center justify-between gap-4 card-hover ${user.disabled ? 'opacity-70' : ''}`}>
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 flex items-center justify-center text-xl font-bold">{user.name?.charAt(0).toUpperCase()}</div>
-              <span className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-slate-800 ${user.status === 'online' && !user.disabled ? 'bg-green-500' : 'bg-slate-500'}`}></span>
-            </div>
-            <div>
-              <h3 className="font-bold text-lg">{user.name}</h3>
-              <p className="text-xs text-slate-500">{user.email}</p>
-              <p className={`text-xs ${user.disabled ? 'text-red-400' : (user.status === 'online' ? 'text-green-400' : 'text-slate-500')}`}>
-                {user.disabled ? '⛔ معطل' : (user.status === 'online' ? '🟢 متصل' : '⚫ غير متصل')}
-              </p>
-            </div>
+        <div key={user.id} className={`glass-card p-4 rounded-2xl flex items-center justify-between gap-4 card-hover ${user.disabled ? 'opacity-60' : ''}`}>
+          <div className="flex items-center gap-3">
+            <div className="relative"><div className="w-11 h-11 rounded-full bg-indigo-500 flex items-center justify-center text-lg font-bold text-white">{user.name?.charAt(0).toUpperCase()}</div><span className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-zinc-900 ${user.status === 'online' && !user.disabled ? 'bg-emerald-500' : 'bg-zinc-600'}`}></span></div>
+            <div><h3 className="font-bold text-base text-zinc-100">{user.name}</h3><p className="text-xs text-zinc-500">{user.email}</p><p className={`text-xs ${user.disabled ? 'text-rose-400' : (user.status === 'online' ? 'text-emerald-400' : 'text-zinc-600')}`}>{user.disabled ? 'معطل' : (user.status === 'online' ? 'متصل' : 'غير متصل')}</p></div>
           </div>
-          {currentUser?.isAdmin && (
-            user.disabled ? (
-              <button onClick={() => handleEnableUser(user.id, user.name)} className="text-green-400 hover:text-green-300 text-sm font-bold transition-colors shrink-0">تفعيل</button>
-            ) : (
-              <button onClick={() => handleDisableUser(user.id, user.name)} className="text-red-400 hover:text-red-300 text-sm font-medium transition-colors shrink-0">تعطيل</button>
-            )
-          )}
+          {currentUser?.isAdmin && (user.disabled ? <button onClick={() => handleEnableUser(user.id, user.name)} className="text-emerald-400 hover:text-emerald-300 text-sm font-bold transition-colors shrink-0 px-3 py-1.5 rounded-lg hover:bg-emerald-500/10">تفعيل</button> : <button onClick={() => handleDisableUser(user.id, user.name)} className="text-rose-400 hover:text-rose-300 text-sm font-medium transition-colors shrink-0 px-3 py-1.5 rounded-lg hover:bg-rose-500/10">تعطيل</button>)}
         </div>
       );
-
       return (
         <div className="animate-fadeIn">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold">الموظفون</h2>
-            {currentUser?.isAdmin && <button onClick={() => setIsModalOpen(true)} className="btn-primary px-4 py-2 rounded-lg font-medium text-white">+ إضافة موظف</button>}
-          </div>
-
-          <div className="mb-10">
-            <h3 className="text-lg font-bold mb-4 text-slate-200 border-b border-slate-700 pb-2">الموظفون النشطون ({activeUsers.length})</h3>
-            {activeUsers.length === 0 ? <p className="text-slate-500 text-center py-6">لا يوجد موظفون نشطون.</p> : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {activeUsers.map(renderUserCard)}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <h3 className="text-lg font-bold mb-4 text-red-400 border-b border-red-500/30 pb-2">الموظفون المعطلون ({disabledUsers.length})</h3>
-            {disabledUsers.length === 0 ? <p className="text-slate-500 text-center py-6">لا يوجد موظفون معطلون.</p> : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {disabledUsers.map(renderUserCard)}
-              </div>
-            )}
-          </div>
-
-          {isModalOpen && (
-            <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-sm p-4 min-h-screen">
-              <div className="glass-card p-6 rounded-2xl w-full max-w-md animate-popIn">
-                <h3 className="text-xl font-bold mb-4">إضافة موظف جديد</h3>
-                <form onSubmit={handleAddUser} className="space-y-4">
-                  <input type="text" placeholder="اسم الموظف" value={name} onChange={e=>setName(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
-                  <input type="email" placeholder="البريد الإلكتروني" value={email} onChange={e=>setEmail(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
-                  <input type="password" placeholder="كلمة المرور" value={password} onChange={e=>setPassword(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
-                  <div className="flex gap-3">
-                    <button type="submit" className="flex-1 btn-primary py-3 rounded-lg font-medium text-white">إنشاء الحساب</button>
-                    <button type="button" onClick={()=>setIsModalOpen(false)} className="flex-1 bg-slate-700 hover:bg-slate-600 py-3 rounded-lg font-medium">إلغاء</button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
+          <div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold text-zinc-100">الموظفون</h2>{currentUser?.isAdmin && <button onClick={() => setIsModalOpen(true)} className="btn-primary flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-white"><Icon name="plus" className="w-4 h-4" /> إضافة موظف</button>}</div>
+          <div className="mb-10"><h3 className="text-lg font-bold mb-4 text-zinc-200 border-b border-zinc-800 pb-2">الموظفون النشطون ({activeUsers.length})</h3>{activeUsers.length === 0 ? <p className="text-zinc-600 text-center py-6">لا يوجد موظفون نشطون.</p> : <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{activeUsers.map(renderUserCard)}</div>}</div>
+          <div><h3 className="text-lg font-bold mb-4 text-rose-400 border-b border-rose-500/20 pb-2">الموظفون المعطلون ({disabledUsers.length})</h3>{disabledUsers.length === 0 ? <p className="text-zinc-600 text-center py-6">لا يوجد موظفون معطلون.</p> : <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{disabledUsers.map(renderUserCard)}</div>}</div>
+          {isModalOpen && (<div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 min-h-screen"><div className="glass-card p-6 rounded-2xl w-full max-w-md animate-popIn"><h3 className="text-xl font-bold mb-4 text-zinc-100">إضافة موظف جديد</h3><form onSubmit={handleAddUser} className="space-y-4"><input type="text" placeholder="اسم الموظف" value={name} onChange={e=>setName(e.target.value)} required className="w-full bg-zinc-900 border border-zinc-800 p-3 rounded-lg outline-none focus:border-indigo-500" /><input type="email" placeholder="البريد الإلكتروني" value={email} onChange={e=>setEmail(e.target.value)} required className="w-full bg-zinc-900 border border-zinc-800 p-3 rounded-lg outline-none focus:border-indigo-500" /><input type="password" placeholder="كلمة المرور" value={password} onChange={e=>setPassword(e.target.value)} required className="w-full bg-zinc-900 border border-zinc-800 p-3 rounded-lg outline-none focus:border-indigo-500" /><div className="flex gap-3 pt-2"><button type="submit" className="flex-1 btn-primary py-3 rounded-lg font-medium text-white">إنشاء الحساب</button><button type="button" onClick={()=>setIsModalOpen(false)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 py-3 rounded-lg font-medium">إلغاء</button></div></form></div></div>)}
         </div>
       );
     }
 
     function Profile() {
-      const { currentUser } = useApp();
-      const [name, setName] = useState(currentUser?.name || '');
-      const [loading, setLoading] = useState(false);
-
-      const handleUpdate = async (e) => {
-        e.preventDefault(); setLoading(true);
-        await db.collection('users').doc(currentUser.uid).update({ name });
-        currentUser.name = name; setLoading(false);
-        alert("تم تحديث الاسم بنجاح.");
-      };
-
+      const { currentUser } = useApp(); const [name, setName] = useState(currentUser?.name || ''); const [loading, setLoading] = useState(false);
+      const handleUpdate = async (e) => { e.preventDefault(); setLoading(true); await db.collection('users').doc(currentUser.uid).update({ name }); currentUser.name = name; setLoading(false); alert("تم تحديث الاسم بنجاح."); };
       return (
         <div className="animate-fadeIn">
-          <h2 className="text-2xl font-bold mb-6">⚙️ إعدادات الحساب</h2>
+          <h2 className="text-2xl font-bold mb-6 text-zinc-100">إعدادات الحساب</h2>
           <div className="glass-card p-6 rounded-2xl max-w-lg">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-20 h-20 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 flex items-center justify-center text-3xl font-bold shadow-lg">{name?.charAt(0).toUpperCase()}</div>
-              <div><p className="text-slate-400 text-sm">البريد الإلكتروني</p><p className="text-lg font-medium">{currentUser?.email}</p></div>
-            </div>
-            <form onSubmit={handleUpdate} className="space-y-4">
-              <div>
-                <label className="block text-sm text-slate-400 mb-1">الاسم المعروض (يظهر في الشات)</label>
-                <input type="text" value={name} onChange={e=>setName(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
-              </div>
-              <button type="submit" disabled={loading} className="btn-primary px-6 py-3 rounded-lg font-medium text-white disabled:opacity-50">{loading ? 'جاري الحفظ...' : 'حفظ التغييرات'}</button>
-            </form>
+            <div className="flex items-center gap-4 mb-6"><div className="w-20 h-20 rounded-full bg-indigo-500 flex items-center justify-center text-3xl font-bold text-white shadow-lg">{name?.charAt(0).toUpperCase()}</div><div><p className="text-zinc-500 text-sm">البريد الإلكتروني</p><p className="text-lg font-medium text-zinc-100">{currentUser?.email}</p></div></div>
+            <form onSubmit={handleUpdate} className="space-y-4"><div><label className="block text-sm text-zinc-400 mb-1.5">الاسم المعروض (يظهر في الشات)</label><input type="text" value={name} onChange={e=>setName(e.target.value)} required className="w-full bg-zinc-900 border border-zinc-800 p-3 rounded-lg outline-none focus:border-indigo-500" /></div><button type="submit" disabled={loading} className="btn-primary px-6 py-3 rounded-lg font-medium text-white disabled:opacity-50">{loading ? 'جاري الحفظ...' : 'حفظ التغييرات'}</button></form>
           </div>
         </div>
       );
     }
 
     // ==========================================
-    // 6. MAIN APP COMPONENT
+    // 7. MAIN APP COMPONENT
     // ==========================================
     function App() {
       const { route, currentUser } = useApp();
@@ -1126,7 +707,7 @@
     }
 
     // ==========================================
-    // 7. RENDER APP
+    // 8. RENDER APP
     // ==========================================
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<AppProvider><App /></AppProvider>);
