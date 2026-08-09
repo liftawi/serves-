@@ -11,6 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 
   <style>
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; }
@@ -57,6 +58,7 @@
     const app = firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.firestore();
+    const rtdb = firebase.database();
 
     // ==========================================
     // 2. ACTIVITY LOGGER
@@ -68,7 +70,7 @@
     }
 
     // ==========================================
-    // 3. APP CONTEXT & AUTH
+    // 3. APP CONTEXT & AUTH & PRESENCE & NOTIFS
     // ==========================================
     const AppContext = createContext();
     function useApp() { return useContext(AppContext); }
@@ -77,35 +79,165 @@
       const [currentUser, setCurrentUser] = useState(null);
       const [loading, setLoading] = useState(true);
       const [route, setRoute] = useState({ page: 'dashboard', id: null });
+      const [notifications, setNotifications] = useState({ chat: false, workshops: false, equipment: false, notes: false, inventory: false });
+
+      const activePageRef = useRef(route.page);
+      const navigateRef = useRef(null);
+
+      useEffect(() => { activePageRef.current = route.page; }, [route.page]);
 
       function login(email, password) { return auth.signInWithEmailAndPassword(email, password); }
       
       async function logout() {
         if (auth.currentUser) {
           await db.collection('users').doc(auth.currentUser.uid).update({ status: 'offline' });
+          rtdb.ref(`status/${auth.currentUser.uid}`).set('offline');
           await auth.signOut();
         }
       }
       
-      function navigate(page, id = null) { setRoute({ page, id }); window.scrollTo(0, 0); }
+      function navigate(page, id = null) { 
+        setRoute({ page, id }); 
+        window.scrollTo(0, 0); 
+        setNotifications(prev => ({ ...prev, [page]: false }));
+      }
+
+      useEffect(() => { navigateRef.current = navigate; }, []);
+
+      // دالة إرسال إشعارات سطح المكتب
+      const showDesktopNotification = (title, body, page) => {
+        if (!("Notification" in window)) return;
+        if (Notification.permission === "granted") {
+          const notification = new Notification(title, { 
+            body: body, 
+            icon: "https://cdn-icons-png.flaticon.com/512/3596/3596165.png" 
+          });
+          notification.onclick = () => {
+            window.focus();
+            if (navigateRef.current) navigateRef.current(page);
+            notification.close();
+          };
+        }
+      };
 
       useEffect(() => {
         const unsub = auth.onAuthStateChanged(async user => {
           if (user) {
+            // طلب إذن الإشعارات عند تسجيل الدخول
+            if ("Notification" in window && Notification.permission === 'default') {
+              Notification.requestPermission();
+            }
+
             const userRef = db.collection('users').doc(user.uid);
             const userDoc = await userRef.get();
-            if (!userDoc.exists) { await userRef.set({ email: user.email, name: user.email, status: 'online' }); } 
-            else { await userRef.update({ status: 'online' }); }
+            
+            if (userDoc.exists && userDoc.data().disabled) {
+              alert("تم تعطيل حسابك من قبل الإدارة.");
+              await auth.signOut();
+              return;
+            }
+
+            if (!userDoc.exists) { 
+              await userRef.set({ email: user.email, name: user.email, status: 'online' }); 
+            } else { 
+              await userRef.update({ status: 'online', disabled: false }); 
+            }
+            
+            const myStatusRef = rtdb.ref(`status/${user.uid}`);
+            rtdb.ref('.info/connected').on('value', (snap) => {
+              if (snap.val() === true) {
+                myStatusRef.onDisconnect().set('offline').then(async () => {
+                  myStatusRef.set('online');
+                  await userRef.update({ status: 'online' });
+                });
+              }
+            });
+            myStatusRef.on('value', (snap) => {
+              if (snap.val() === 'offline') userRef.update({ status: 'offline' });
+            });
+
             const userData = userDoc.exists ? userDoc.data() : { name: user.email };
-            setCurrentUser({ uid: user.uid, email: user.email, name: userData.name || user.email });
+            const isAdmin = user.email === 'a@gmail.com';
+            setCurrentUser({ uid: user.uid, email: user.email, name: userData.name || user.email, isAdmin });
           } else { setCurrentUser(null); }
           setLoading(false);
         });
         return unsub;
       }, []);
 
+      // مستمعو الإشعارات (Real-time Listeners + Desktop Notifications)
+      useEffect(() => {
+        if (!currentUser) return;
+        const unsubs = [];
+
+        // Chat Listener
+        let initialChat = true;
+        unsubs.push(db.collection('general_chat').orderBy('timestamp', 'asc').onSnapshot(snap => {
+          if (initialChat) { initialChat = false; return; }
+          snap.docChanges().forEach(c => {
+            if (c.type === 'added' && c.doc.data().senderId !== currentUser.uid && activePageRef.current !== 'chat') {
+              setNotifications(p => ({...p, chat: true}));
+              const msgData = c.doc.data();
+              showDesktopNotification(`رسالة جديدة من ${msgData.senderName}`, msgData.text, 'chat');
+            }
+          });
+        }));
+
+        // Workshops Listener
+        let initialWs = true;
+        unsubs.push(db.collection('workshops').where('status','==','active').onSnapshot(snap => {
+          if (initialWs) { initialWs = false; return; }
+          snap.docChanges().forEach(c => {
+            if (c.type === 'added' && activePageRef.current !== 'workshops') {
+              setNotifications(p => ({...p, workshops: true}));
+              showDesktopNotification('ورشة عمل جديدة', `تم إنشاء ورشة: ${c.doc.data().name}`, 'workshops');
+            }
+          });
+        }));
+
+        // Equipment Listener
+        let initialEq = true;
+        unsubs.push(db.collection('equipment').onSnapshot(snap => {
+          if (initialEq) { initialEq = false; return; }
+          snap.docChanges().forEach(c => {
+            if (c.type === 'added' && activePageRef.current !== 'equipment') {
+              setNotifications(p => ({...p, equipment: true}));
+              showDesktopNotification('معدة جديدة', `تم إضافة: ${c.doc.data().name}`, 'equipment');
+            }
+          });
+        }));
+
+        // Notes Listener
+        let initialNotes = true;
+        unsubs.push(db.collection('notes').onSnapshot(snap => {
+          if (initialNotes) { initialNotes = false; return; }
+          snap.docChanges().forEach(c => {
+            if (c.type === 'added' && activePageRef.current !== 'notes') {
+              setNotifications(p => ({...p, notes: true}));
+              showDesktopNotification('ملاحظة جديدة', `تمت إضافة ملاحظة بواسطة: ${c.doc.data().userName}`, 'notes');
+            }
+          });
+        }));
+
+        // Inventory Listener (Admin only)
+        if (currentUser.isAdmin) {
+          let initialInv = true;
+          unsubs.push(db.collection('inventory').onSnapshot(snap => {
+            if (initialInv) { initialInv = false; return; }
+            snap.docChanges().forEach(c => {
+              if (c.type === 'added' && activePageRef.current !== 'inventory') {
+                setNotifications(p => ({...p, inventory: true}));
+                showDesktopNotification('مادة جديدة في المخزون', `تم إضافة: ${c.doc.data().name}`, 'inventory');
+              }
+            });
+          }));
+        }
+
+        return () => unsubs.forEach(u => u());
+      }, [currentUser]);
+
       return (
-        <AppContext.Provider value={{ currentUser, login, logout, route, navigate }}>
+        <AppContext.Provider value={{ currentUser, login, logout, route, navigate, notifications }}>
           {children}
         </AppContext.Provider>
       );
@@ -122,27 +254,30 @@
           {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setIsSidebarOpen(false)}></div>}
           <div className="flex-1 flex flex-col overflow-hidden">
             <Topbar setIsSidebarOpen={setIsSidebarOpen} />
-            <main className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar">
-              {children}
-            </main>
+            <main className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar">{children}</main>
           </div>
         </div>
       );
     }
 
     function Sidebar({ isSidebarOpen, setIsSidebarOpen }) {
-      const { navigate, route, currentUser } = useApp();
-      const navItems = [
+      const { navigate, route, currentUser, notifications } = useApp();
+      
+      let navItems = [
         { name: 'الرئيسية', page: 'dashboard', icon: '🏠' },
-        { name: 'الشات العام', page: 'chat', icon: '💬' },
-        { name: 'الورشات الحالية', page: 'workshops', icon: '🛠️' },
+        { name: 'الشات العام', page: 'chat', icon: '💬', notify: notifications.chat },
+        { name: 'الورشات الحالية', page: 'workshops', icon: '🛠️', notify: notifications.workshops },
         { name: 'أرشيف الورشات', page: 'archive', icon: '📚' },
-        { name: 'المعدات', page: 'equipment', icon: '🔧' },
-        { name: 'الملاحظات', page: 'notes', icon: '📝' },
+        { name: 'المعدات', page: 'equipment', icon: '🔧', notify: notifications.equipment },
+        { name: 'الملاحظات', page: 'notes', icon: '📝', notify: notifications.notes },
         { name: 'سجل النشاط', page: 'logs', icon: '📜' },
         { name: 'الموظفون', page: 'users', icon: '👥' },
-        { name: 'حسابي', page: 'profile', icon: '⚙️' },
       ];
+      
+      if (currentUser?.isAdmin) {
+        navItems.splice(6, 0, { name: 'حساب المواد', page: 'inventory', icon: '📦', notify: notifications.inventory });
+      }
+      navItems.push({ name: 'حسابي', page: 'profile', icon: '⚙️' });
       
       const handleNavigate = (page) => { navigate(page); setIsSidebarOpen(false); };
 
@@ -153,9 +288,10 @@
           </div>
           <nav className="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
             {navItems.map(item => (
-              <button key={item.page} onClick={() => handleNavigate(item.page)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 text-right ${route.page === item.page ? 'bg-gradient-to-l from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-700/50 hover:text-white'}`}>
+              <button key={item.page} onClick={() => handleNavigate(item.page)} className={`relative w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 text-right ${route.page === item.page ? 'bg-gradient-to-l from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-700/50 hover:text-white'}`}>
                 <span className="text-lg">{item.icon}</span>
                 <span className="font-medium">{item.name}</span>
+                {item.notify && <span className="absolute top-2 left-2 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>}
               </button>
             ))}
           </nav>
@@ -163,7 +299,7 @@
             <div className="flex items-center gap-3 bg-slate-900/50 p-3 rounded-lg">
               <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 flex items-center justify-center text-sm font-bold">{currentUser?.name?.charAt(0).toUpperCase()}</div>
               <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-bold truncate">{currentUser?.name}</p>
+                <p className="text-sm font-bold truncate">{currentUser?.name} {currentUser?.isAdmin && <span className="text-xs text-yellow-400">(مسؤول)</span>}</p>
                 <p className="text-xs text-green-400 flex items-center gap-1"><span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span> متصل الآن</p>
               </div>
             </div>
@@ -271,7 +407,7 @@
         <div className="animate-fadeIn">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold">الورشات الحالية</h2>
-            <button onClick={() => setIsModalOpen(true)} className="btn-primary px-4 py-2 rounded-lg font-medium text-white">+ إنشاء ورشة</button>
+            {currentUser?.isAdmin && <button onClick={() => setIsModalOpen(true)} className="btn-primary px-4 py-2 rounded-lg font-medium text-white">+ إنشاء ورشة</button>}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {workshops.map(ws => (
@@ -369,7 +505,7 @@
         <div className="flex flex-col gap-4 h-[calc(100vh-120px)] animate-fadeIn">
           <div className="glass-card p-4 rounded-xl flex justify-between items-center shrink-0">
             <div><h2 className="text-xl font-bold">{workshop.name}</h2><p className="text-slate-400 text-sm">📍 {workshop.location} | {workshop.status === 'active' ? '🟢 نشطة' : '✅ منتهية'}</p></div>
-            {workshop.status === 'active' && <button onClick={handleEndWorkshop} className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-sm font-medium transition-all">✅ إنهاء الورشة</button>}
+            {workshop.status === 'active' && currentUser?.isAdmin && <button onClick={handleEndWorkshop} className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-sm font-medium transition-all">✅ إنهاء الورشة</button>}
           </div>
           
           <div className="glass-card p-4 rounded-xl shrink-0">
@@ -408,7 +544,6 @@
             </div>
           </div>
 
-          {/* الشات */}
           <div className="flex-1 glass-card rounded-xl flex flex-col overflow-hidden min-h-0">
             <div className="flex-1 p-4 overflow-y-auto space-y-3 custom-scrollbar">
               {messages.map(msg => (
@@ -448,6 +583,11 @@
         setNewMsg('');
       };
 
+      const handleDeleteMessage = async (msgId) => {
+        if (!window.confirm("هل أنت متأكد من حذف هذه الرسالة؟")) return;
+        await db.collection('general_chat').doc(msgId).delete();
+      };
+
       return (
         <div className="flex flex-col h-[calc(100vh-120px)] animate-fadeIn gap-4">
           <div className="glass-card p-4 rounded-xl flex items-center gap-3 shrink-0">
@@ -459,7 +599,12 @@
               {messages.map(msg => (
                 <div key={msg.id} className={`flex flex-col ${msg.senderId === currentUser.uid ? 'items-end' : 'items-start'} animate-fadeIn`}>
                   <span className="text-xs text-slate-500 mb-1">{msg.senderName}</span>
-                  <div className={`max-w-[70%] p-3 rounded-lg ${msg.senderId === currentUser.uid ? 'bg-gradient-to-l from-blue-600 to-indigo-600 text-white' : 'bg-slate-700 text-slate-100'}`}><p className="text-sm break-words">{msg.text}</p></div>
+                  <div className={`max-w-[70%] p-3 rounded-lg ${msg.senderId === currentUser.uid ? 'bg-gradient-to-l from-blue-600 to-indigo-600 text-white' : 'bg-slate-700 text-slate-100'}`}>
+                    <p className="text-sm break-words">{msg.text}</p>
+                  </div>
+                  {currentUser?.isAdmin && (
+                    <button onClick={() => handleDeleteMessage(msg.id)} className="text-red-400 hover:text-red-300 text-xs mt-1 transition-colors">حذف الرسالة</button>
+                  )}
                 </div>
               ))}
               <div ref={messagesEndRef} />
@@ -532,7 +677,7 @@
         <div className="animate-fadeIn">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold">إدارة المعدات</h2>
-            <button onClick={() => setIsModalOpen(true)} className="btn-primary px-4 py-2 rounded-lg font-medium text-white">+ إضافة معدة</button>
+            {currentUser?.isAdmin && <button onClick={() => setIsModalOpen(true)} className="btn-primary px-4 py-2 rounded-lg font-medium text-white">+ إضافة معدة</button>}
           </div>
           <div className="glass-card rounded-xl overflow-hidden overflow-x-auto">
             <table className="w-full text-right min-w-[600px]">
@@ -547,7 +692,8 @@
                     <td className="p-4"><span className={`px-3 py-1 rounded-full text-xs ${statusStyles[eq.status]}`}>{eq.status === 'available' ? '🟢 متوفرة' : eq.status === 'in_use' ? '🟠 مستخدمة' : '🔴 صيانة'}</span></td>
                     <td className="p-4 text-slate-400 text-sm">{eq.currentWorkshopName || '—'}</td>
                     <td className="p-4 text-center">
-                      <button onClick={() => handleDelete(eq.id, eq.name)} className="text-red-400 hover:text-red-300 text-sm font-medium transition-colors">حذف</button>
+                      {currentUser?.isAdmin && <button onClick={() => handleDelete(eq.id, eq.name)} className="text-red-400 hover:text-red-300 text-sm font-medium transition-colors">حذف</button>}
+                      {!currentUser?.isAdmin && <span className="text-slate-600 text-sm">—</span>}
                     </td>
                   </tr>
                 ))}
@@ -562,6 +708,82 @@
                 <form onSubmit={handleAdd} className="space-y-4">
                   <input type="text" placeholder="اسم المعدة" value={name} onChange={e=>setName(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
                   <input type="text" placeholder="الرقم التسلسلي" value={serial} onChange={e=>setSerial(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
+                  <div className="flex gap-3">
+                    <button type="submit" className="flex-1 btn-primary py-3 rounded-lg font-medium text-white">إضافة</button>
+                    <button type="button" onClick={()=>setIsModalOpen(false)} className="flex-1 bg-slate-700 hover:bg-slate-600 py-3 rounded-lg font-medium">إلغاء</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function Inventory() {
+      const { currentUser } = useApp();
+      const [items, setItems] = useState([]);
+      const [isModalOpen, setIsModalOpen] = useState(false);
+      const [name, setName] = useState(''); const [quantity, setQuantity] = useState(''); const [price, setPrice] = useState('');
+
+      useEffect(() => {
+        const unsub = db.collection('inventory').onSnapshot(snap => setItems(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        return () => unsub();
+      }, []);
+
+      const handleAdd = async (e) => {
+        e.preventDefault();
+        await db.collection('inventory').add({ name, quantity: parseInt(quantity), price: parseFloat(price), createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'inventory', action: 'add', entityId: 'inv', entityName: name });
+        setName(''); setQuantity(''); setPrice(''); setIsModalOpen(false);
+      };
+
+      const handleDelete = async (id, name) => {
+        if (!window.confirm(`حذف المادة "${name}"؟`)) return;
+        await db.collection('inventory').doc(id).delete();
+        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'inventory', action: 'delete', entityId: id, entityName: name });
+      };
+
+      const totalValue = items.reduce((acc, item) => acc + (item.quantity * item.price), 0);
+
+      return (
+        <div className="animate-fadeIn">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h2 className="text-2xl font-bold">📦 حساب المواد</h2>
+              <p className="text-slate-400 text-sm">إجمالي قيمة المواد: <span className="font-bold text-green-400">{totalValue.toFixed(2)} د.أ</span></p>
+            </div>
+            <button onClick={() => setIsModalOpen(true)} className="btn-primary px-4 py-2 rounded-lg font-medium text-white">+ إضافة مادة</button>
+          </div>
+          <div className="glass-card rounded-xl overflow-hidden overflow-x-auto">
+            <table className="w-full text-right min-w-[600px]">
+              <thead className="bg-slate-900/50 text-slate-400 text-sm">
+                <tr><th className="p-4">اسم المادة</th><th className="p-4">الكمية</th><th className="p-4">سعر الوحدة</th><th className="p-4">الإجمالي</th><th className="p-4 text-center">إجراءات</th></tr>
+              </thead>
+              <tbody>
+                {items.map(item => (
+                  <tr key={item.id} className="border-t border-slate-700/50 hover:bg-slate-700/20">
+                    <td className="p-4 font-medium">{item.name}</td>
+                    <td className="p-4 text-slate-400">{item.quantity}</td>
+                    <td className="p-4 text-slate-400">{item.price.toFixed(2)}</td>
+                    <td className="p-4 text-green-400 font-medium">{(item.quantity * item.price).toFixed(2)}</td>
+                    <td className="p-4 text-center">
+                      <button onClick={() => handleDelete(item.id, item.name)} className="text-red-400 hover:text-red-300 text-sm font-medium">حذف</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {isModalOpen && (
+            <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-sm p-4 min-h-screen">
+              <div className="glass-card p-6 rounded-2xl w-full max-w-md animate-popIn">
+                <h3 className="text-xl font-bold mb-4">إضافة مادة جديدة</h3>
+                <form onSubmit={handleAdd} className="space-y-4">
+                  <input type="text" placeholder="اسم المادة" value={name} onChange={e=>setName(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
+                  <input type="number" placeholder="الكمية" value={quantity} onChange={e=>setQuantity(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
+                  <input type="number" step="0.01" placeholder="سعر الوحدة" value={price} onChange={e=>setPrice(e.target.value)} required className="w-full bg-slate-900/50 p-3 rounded-lg outline-none focus:ring-2 ring-blue-500" />
                   <div className="flex gap-3">
                     <button type="submit" className="flex-1 btn-primary py-3 rounded-lg font-medium text-white">إضافة</button>
                     <button type="button" onClick={()=>setIsModalOpen(false)} className="flex-1 bg-slate-700 hover:bg-slate-600 py-3 rounded-lg font-medium">إلغاء</button>
@@ -609,7 +831,7 @@
                 <p className="text-slate-200 mb-4 whitespace-pre-wrap break-words">{note.text}</p>
                 <div className="flex items-center justify-between border-t border-slate-700/50 pt-2 mt-2">
                   <span className="text-xs text-slate-500">{note.userName} - {note.createdAt?.toDate().toLocaleDateString('ar-EG')}</span>
-                  <button onClick={() => handleDelete(note.id)} className="text-red-400 hover:text-red-300 text-sm font-medium transition-colors">حذف</button>
+                  <button onClick={() => handleDelete(note.id)} className="text-red-400 hover:text-red-300 text-sm font-medium">حذف</button>
                 </div>
               </div>
             ))}
@@ -668,30 +890,42 @@
           const secondaryApp = firebase.initializeApp(firebaseConfig, "Secondary_" + Date.now());
           const secondaryAuth = secondaryApp.auth();
           const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, password);
-          await db.collection('users').doc(userCredential.user.uid).set({ email, name, status: 'offline' });
+          await db.collection('users').doc(userCredential.user.uid).set({ email, name, status: 'offline', disabled: false });
           await secondaryAuth.signOut(); await secondaryApp.delete();
           setEmail(''); setPassword(''); setName(''); setIsModalOpen(false);
         } catch (error) { alert("خطأ في إنشاء الحساب: " + error.message); }
+      };
+
+      const handleDisableUser = async (userId, userName) => {
+        if (userId === currentUser.uid) { alert("لا يمكنك حذف حسابك أثناء استخدامه."); return; }
+        if (!window.confirm(`هل أنت متأكد من حذف/تعطيل الموظف "${userName}"؟`)) return;
+        await db.collection('users').doc(userId).update({ disabled: true, status: 'offline' });
+        await logActivity({ userId: currentUser.uid, userName: currentUser.name, type: 'user', action: 'delete', entityId: userId, entityName: userName });
       };
 
       return (
         <div className="animate-fadeIn">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold">الموظفون</h2>
-            <button onClick={() => setIsModalOpen(true)} className="btn-primary px-4 py-2 rounded-lg font-medium text-white">+ إضافة موظف</button>
+            {currentUser?.isAdmin && <button onClick={() => setIsModalOpen(true)} className="btn-primary px-4 py-2 rounded-lg font-medium text-white">+ إضافة موظف</button>}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {users.map(user => (
-              <div key={user.id} className="glass-card p-4 rounded-xl flex items-center gap-4 card-hover">
-                <div className="relative">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 flex items-center justify-center text-xl font-bold">{user.name?.charAt(0).toUpperCase()}</div>
-                  <span className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-slate-800 ${user.status === 'online' ? 'bg-green-500' : 'bg-slate-500'}`}></span>
+              <div key={user.id} className="glass-card p-4 rounded-xl flex items-center justify-between gap-4 card-hover">
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 flex items-center justify-center text-xl font-bold">{user.name?.charAt(0).toUpperCase()}</div>
+                    <span className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-slate-800 ${user.status === 'online' ? 'bg-green-500' : 'bg-slate-500'}`}></span>
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg">{user.name}</h3>
+                    <p className="text-xs text-slate-500">{user.email}</p>
+                    <p className={`text-xs ${user.status === 'online' ? 'text-green-400' : 'text-slate-500'}`}>{user.status === 'online' ? '🟢 متصل' : '⚫ غير متصل'}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-lg">{user.name}</h3>
-                  <p className="text-xs text-slate-500">{user.email}</p>
-                  <p className={`text-xs ${user.status === 'online' ? 'text-green-400' : 'text-slate-500'}`}>{user.status === 'online' ? '🟢 متصل' : '⚫ غير متصل'}</p>
-                </div>
+                {currentUser?.isAdmin && (
+                  <button onClick={() => handleDisableUser(user.id, user.name)} className="text-red-400 hover:text-red-300 text-sm font-medium transition-colors shrink-0">حذف</button>
+                )}
               </div>
             ))}
           </div>
@@ -762,6 +996,7 @@
           case 'workshop-details': pageContent = <WorkshopDetails />; break;
           case 'archive': pageContent = <Archive />; break;
           case 'equipment': pageContent = <Equipment />; break;
+          case 'inventory': pageContent = currentUser.isAdmin ? <Inventory /> : <Dashboard />; break;
           case 'notes': pageContent = <Notes />; break;
           case 'logs': pageContent = <ActivityLog />; break;
           case 'users': pageContent = <Users />; break;
